@@ -38,10 +38,17 @@ type Bird = {
   id: number;
   raptorId: RaptorId;
   direction: 1 | -1;
-  x: number;
-  y: number;
-  speed: number;
-  scale: number;
+  startX: number;
+  startY: number;
+  controlX: number;
+  controlY: number;
+  endX: number;
+  endY: number;
+  startedAt: number;
+  duration: number;
+  farScale: number;
+  nearScale: number;
+  bank: number;
   bob: number;
   phase: number;
   frameOffset: number;
@@ -101,15 +108,17 @@ const DIFFICULTY = {
     label: "Beginner",
     spawnEvery: [1350, 1850],
     maxBirds: 3,
-    speed: [72, 128],
-    scale: [0.34, 0.48],
+    flightDuration: [7600, 11200],
+    farScale: [0.12, 0.18],
+    nearScale: [0.36, 0.52],
   },
   expert: {
     label: "Expert",
     spawnEvery: [640, 1020],
     maxBirds: 7,
-    speed: [118, 218],
-    scale: [0.24, 0.42],
+    flightDuration: [5200, 8200],
+    farScale: [0.09, 0.16],
+    nearScale: [0.28, 0.46],
   },
 } satisfies Record<
   Difficulty,
@@ -117,13 +126,27 @@ const DIFFICULTY = {
     label: string;
     spawnEvery: [number, number];
     maxBirds: number;
-    speed: [number, number];
-    scale: [number, number];
+    flightDuration: [number, number];
+    farScale: [number, number];
+    nearScale: [number, number];
   }
 >;
 
 function randomBetween([min, max]: [number, number]) {
   return min + Math.random() * (max - min);
+}
+
+function lerp(start: number, end: number, progress: number) {
+  return start + (end - start) * progress;
+}
+
+function easeInOut(progress: number) {
+  return progress * progress * (3 - 2 * progress);
+}
+
+function quadraticBezier(start: number, control: number, end: number, progress: number) {
+  const inverse = 1 - progress;
+  return inverse * inverse * start + 2 * inverse * progress * control + progress * progress * end;
 }
 
 function makeCounts(): Counts {
@@ -209,19 +232,41 @@ export function App() {
     imageMapRef.current = Object.fromEntries(entries) as Record<RaptorId, SpriteAsset>;
   }, []);
 
-  const spawnBird = useCallback((viewWidth: number, viewHeight: number) => {
+  const spawnBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
     const config = DIFFICULTY[difficulty];
     const raptor = RAPTORS[Math.floor(Math.random() * RAPTORS.length)];
     const direction: 1 | -1 = Math.random() > 0.5 ? 1 : -1;
+    const startsNearHorizon = Math.random() > 0.28;
+    const startX = startsNearHorizon
+      ? randomBetween([viewWidth * 0.08, viewWidth * 0.92])
+      : direction === 1
+        ? -120
+        : viewWidth + 120;
+    const startY = startsNearHorizon
+      ? randomBetween([viewHeight * 0.08, viewHeight * 0.34])
+      : randomBetween([viewHeight * 0.16, viewHeight * 0.46]);
+    const endX = direction === 1
+      ? randomBetween([viewWidth * 0.64, viewWidth + 180])
+      : randomBetween([-180, viewWidth * 0.36]);
+    const endY = randomBetween([viewHeight * 0.52, viewHeight * 0.82]);
+    const controlX = randomBetween([viewWidth * 0.3, viewWidth * 0.7]);
+    const controlY = randomBetween([viewHeight * 0.18, viewHeight * 0.48]);
     const bird: Bird = {
       id: birdIdRef.current,
       raptorId: raptor.id,
       direction,
-      x: direction === 1 ? -180 : viewWidth + 180,
-      y: randomBetween([viewHeight * 0.18, viewHeight * 0.62]),
-      speed: randomBetween(config.speed),
-      scale: randomBetween(config.scale),
-      bob: randomBetween([3, 16]),
+      startX,
+      startY,
+      controlX,
+      controlY,
+      endX,
+      endY,
+      startedAt: timestamp,
+      duration: randomBetween(config.flightDuration),
+      farScale: randomBetween(config.farScale),
+      nearScale: randomBetween(config.nearScale),
+      bank: randomBetween([0.06, 0.18]) * direction,
+      bob: randomBetween([2, 8]),
       phase: Math.random() * Math.PI * 2,
       frameOffset: Math.floor(Math.random() * 16),
     };
@@ -231,7 +276,7 @@ export function App() {
     actualCountsRef.current[raptor.id] += 1;
   }, [difficulty]);
 
-  const drawScene = useCallback((timestamp: number, dt: number) => {
+  const drawScene = useCallback((timestamp: number) => {
     const canvas = canvasRef.current;
     const images = imageMapRef.current;
     if (!canvas || !images) return;
@@ -255,30 +300,40 @@ export function App() {
 
     drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
-    for (let i = 0; i < 6; i += 1) {
-      const cloudX = ((timestamp * 0.006 * (i + 1)) % (viewWidth + 260)) - 180;
-      const cloudY = 38 + i * 32;
-      ctx.beginPath();
-      ctx.ellipse(cloudX, cloudY, 58, 16, 0, 0, Math.PI * 2);
-      ctx.ellipse(cloudX + 50, cloudY + 6, 42, 12, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
     const config = DIFFICULTY[difficulty];
     if (timestamp >= nextSpawnRef.current && birdsRef.current.length < config.maxBirds) {
-      spawnBird(viewWidth, viewHeight);
+      spawnBird(viewWidth, viewHeight, timestamp);
       nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery);
     }
 
-    birdsRef.current = birdsRef.current
-      .map((bird) => ({
-        ...bird,
-        x: bird.x + bird.direction * bird.speed * dt,
-      }))
-      .filter((bird) => (bird.direction === 1 ? bird.x < viewWidth + 260 : bird.x > -260));
+    birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
 
-    for (const bird of birdsRef.current) {
+    const visibleBirds = birdsRef.current
+      .map((bird) => {
+        const rawProgress = (timestamp - bird.startedAt) / bird.duration;
+        const progress = Math.min(1, Math.max(0, rawProgress));
+        const eased = easeInOut(progress);
+        const overhead = Math.sin(Math.PI * progress);
+        const x = quadraticBezier(bird.startX, bird.controlX, bird.endX, eased);
+        const y = quadraticBezier(bird.startY, bird.controlY, bird.endY, eased)
+          + Math.sin(timestamp * 0.003 + bird.phase) * bird.bob;
+        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12));
+        const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
+        const rotation = Math.sin(progress * Math.PI * 2 + bird.phase) * bird.bank;
+
+        return {
+          bird,
+          x,
+          y,
+          scale,
+          alpha,
+          rotation,
+        };
+      })
+      .sort((a, b) => a.scale - b.scale);
+
+    for (const visibleBird of visibleBirds) {
+      const { bird, x, y, scale, alpha, rotation } = visibleBird;
       const sprite = images[bird.raptorId];
       if (!sprite.ready || sprite.width === 0) continue;
 
@@ -287,16 +342,17 @@ export function App() {
       const frame = (Math.floor(timestamp / 90) + bird.frameOffset) % (FRAME_COLUMNS * FRAME_ROWS);
       const sx = (frame % FRAME_COLUMNS) * cellWidth;
       const sy = Math.floor(frame / FRAME_COLUMNS) * cellHeight;
-      const drawWidth = cellWidth * bird.scale;
-      const drawHeight = cellHeight * bird.scale;
-      const y = bird.y + Math.sin(timestamp * 0.004 + bird.phase) * bird.bob;
+      const drawWidth = cellWidth * scale;
+      const drawHeight = cellHeight * scale;
 
       ctx.save();
-      ctx.translate(bird.x, y);
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
       if (bird.direction < 0) ctx.scale(-1, 1);
-      ctx.shadowColor = "rgba(16, 42, 47, 0.28)";
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetY = 8;
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = "rgba(16, 42, 47, 0.18)";
+      ctx.shadowBlur = 6 + scale * 10;
+      ctx.shadowOffsetY = 3 + scale * 8;
       ctx.drawImage(sprite.image, sx, sy, cellWidth, cellHeight, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
     }
@@ -312,12 +368,11 @@ export function App() {
         lastFrameRef.current = timestamp;
       }
 
-      const dt = Math.min(0.04, (timestamp - lastFrameRef.current) / 1000);
       lastFrameRef.current = timestamp;
       const elapsed = (timestamp - startTimeRef.current) / 1000;
       const remaining = ROUND_SECONDS - elapsed;
 
-      drawScene(timestamp, dt);
+      drawScene(timestamp);
       setTimeLeft(remaining);
 
       if (remaining <= 0) {
