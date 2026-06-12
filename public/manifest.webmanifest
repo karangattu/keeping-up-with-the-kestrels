@@ -1,0 +1,25 @@
+{
+  "name": "Keeping Up with the Kestrels",
+  "short_name": "Kestrels",
+  "description": "A one-minute raptor counting game for learning Bay Area birds of prey.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#102a2f",
+  "theme_color": "#102a2f",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,2 +1,3 @@
-# keeping-up-with-the-kestrels
-An educational game that teaches players about the raptors of the SF Bay Area
+# Keeping Up with the Kestrels
+
+Tap to count raptors as they fly by — a Bay Area bird ID game. Run `npm install && npm run dev` to start.
