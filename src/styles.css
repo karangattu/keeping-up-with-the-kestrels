@@ -266,7 +266,7 @@ button {
   right: max(16px, env(safe-area-inset-right));
   display: flex;
   justify-content: space-between;
-  pointer-events: none;
+  z-index: 20;
 }
 
 .hud-item {
