@@ -2,6 +2,8 @@ import {
   Clock3,
   Gauge,
   Home,
+  Maximize,
+  Minimize,
   Play,
   RotateCcw,
   SkipForward,
@@ -617,6 +619,85 @@ export function App() {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  // Mobile responsiveness and screen size detection
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768 || window.innerHeight <= 450);
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768 || window.innerHeight <= 450);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Fullscreen management state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
+  // Fullscreen helpers
+  const requestFullscreen = () => {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+      void elem.requestFullscreen().catch((err) => console.log(err));
+    } else if ("webkitRequestFullscreen" in elem) {
+      void (elem as unknown as { webkitRequestFullscreen: () => void }).webkitRequestFullscreen();
+    } else if ("msRequestFullscreen" in elem) {
+      void (elem as unknown as { msRequestFullscreen: () => void }).msRequestFullscreen();
+    }
+  };
+
+  const exitFullscreen = () => {
+    if (document.fullscreenElement) {
+      if (document.exitFullscreen) {
+        void document.exitFullscreen().catch((err) => console.log(err));
+      } else if ("webkitExitFullscreen" in document) {
+        void (document as unknown as { webkitExitFullscreen: () => void }).webkitExitFullscreen();
+      }
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      requestFullscreen();
+    } else {
+      exitFullscreen();
+    }
+  };
+
+  // PWA offline installation installer
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User installed outcome: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowInstallBtn(false);
+  };
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [countdown, setCountdown] = useState(3);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
@@ -760,8 +841,12 @@ export function App() {
     const endY = startY + randomBetween([-viewHeight * 0.05, viewHeight * 0.08]);
     const controlY = (startY + endY) / 2 + randomBetween([-viewHeight * 0.06, viewHeight * 0.06]);
     const controlX = viewWidth / 2 + randomBetween([-viewWidth * 0.08, viewWidth * 0.08]);
-    const hoverX = randomBetween([viewWidth * 0.38, viewWidth * 0.62]);
-    const hoverY = randomBetween([viewHeight * 0.18, viewHeight * 0.38]);
+    const hoverX = isMobile
+      ? randomBetween([viewWidth * 0.15, viewWidth * 0.85])
+      : randomBetween([viewWidth * 0.38, viewWidth * 0.62]);
+    const hoverY = isMobile
+      ? randomBetween([viewHeight * 0.15, viewHeight * 0.5])
+      : randomBetween([viewHeight * 0.18, viewHeight * 0.38]);
     const hoverStart = randomBetween([0.2, 0.28]);
     const hoverEnd = randomBetween([0.68, 0.78]);
     
@@ -801,7 +886,7 @@ export function App() {
     birdIdRef.current += 1;
     birdsRef.current.push(bird);
     actualCountsRef.current[raptor.id] += 1;
-  }, [difficulty]);
+  }, [difficulty, isMobile]);
 
   const drawScene = useCallback((timestamp: number) => {
     const canvas = canvasRef.current;
@@ -862,9 +947,10 @@ export function App() {
         const windX = wind.x * viewWidth * 0.08 * windEffect * noiseScale;
         const windY = wind.y * viewHeight * 0.05 * windEffect * noiseScale;
         
-        const x = base.x + noiseX + windX;
-        const y = base.y + noiseY + windY + altitudeVar
-          + Math.sin(timestamp * 0.0014 + bird.phase) * bird.bob;
+        const x = isMobile ? bird.hoverX : base.x + noiseX + windX;
+        const y = isMobile
+          ? bird.hoverY + Math.sin(timestamp * 0.0014 + bird.phase) * bird.bob * 0.5
+          : base.y + noiseY + windY + altitudeVar + Math.sin(timestamp * 0.0014 + bird.phase) * bird.bob;
         
         const prevProgress = Math.max(0, progress - 0.02);
         const prevBase = getBirdBasePosition(bird, prevProgress);
@@ -885,16 +971,22 @@ export function App() {
         const hoverFacing = bird.flightStyle === "hover" && progress >= bird.hoverStart && progress <= bird.hoverEnd
           ? Math.sin(progress * Math.PI * 6 + bird.phase) * 0.04
           : 0;
-        const rotation = clamp(
-          bird.bank + bankFromCurvature + Math.sin(progress * Math.PI * 2 + bird.phase) * 0.018 + pitchFromVelocity + teeter + hoverFacing,
-          -0.32,
-          0.32,
-        );
+        const rotation = isMobile
+          ? Math.sin(progress * Math.PI * 2 + bird.phase) * 0.03
+          : clamp(
+              bird.bank + bankFromCurvature + Math.sin(progress * Math.PI * 2 + bird.phase) * 0.018 + pitchFromVelocity + teeter + hoverFacing,
+              -0.32,
+              0.32,
+            );
         
         const raptorConfig = RAPTORS.find((r) => r.key === bird.raptorKey);
         const speciesScale = raptorConfig?.sizeScale ?? 1;
-        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12)) * speciesScale;
-        const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
+        const scale = isMobile
+          ? bird.nearScale * speciesScale * 1.35 * Math.sin(Math.PI * progress)
+          : lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12)) * speciesScale;
+        const alpha = isMobile
+          ? clamp(Math.sin(Math.PI * progress) * 2, 0, 1)
+          : lerp(0.7, 1, Math.pow(overhead, 0.5));
 
         return {
           bird,
@@ -960,7 +1052,7 @@ export function App() {
       ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
     }
-  }, [difficulty, spawnBird]);
+  }, [difficulty, spawnBird, isMobile]);
 
   useEffect(() => {
     if (phase !== "playing") return undefined;
@@ -1079,6 +1171,7 @@ export function App() {
   };
 
   const prepareRound = (selectedDifficulty = difficulty) => {
+    requestFullscreen();
     setDifficulty(selectedDifficulty);
     setPlayerCounts(makeCounts());
     setActualCounts(makeCounts());
@@ -1098,6 +1191,7 @@ export function App() {
   };
 
   const startRound = () => {
+    requestFullscreen();
     setTimeLeft(ROUND_SECONDS);
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
@@ -1113,10 +1207,12 @@ export function App() {
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
     nextSpawnRef.current = 0;
+    exitFullscreen();
     setPhase("intro");
   };
 
   const completeTutorial = () => {
+    requestFullscreen();
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
@@ -1126,6 +1222,7 @@ export function App() {
   };
 
   const startTutorial = () => {
+    requestFullscreen();
     setTutorialStep("welcome");
     setPhase("tutorial");
   };
@@ -1423,6 +1520,12 @@ export function App() {
               <Play aria-hidden="true" />
               Start 60-second round
             </button>
+            {showInstallBtn && (
+              <button className="secondary-action install-app-btn" type="button" onClick={handleInstallClick}>
+                <Smartphone aria-hidden="true" />
+                Install Game Offline
+              </button>
+            )}
           </div>
         </section>
       )}
@@ -1551,6 +1654,15 @@ export function App() {
                 </span>
               </div>
             )}
+            <button
+              className="hud-item hud-fullscreen-button"
+              type="button"
+              onClick={toggleFullscreen}
+              aria-label="Toggle fullscreen mode"
+            >
+              {isFullscreen ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
+              <span>{isFullscreen ? "Exit" : "Full"}</span>
+            </button>
             <button
               className="hud-item hud-quit-button"
               type="button"
@@ -1715,7 +1827,10 @@ export function App() {
               <button
                 className="secondary-action"
                 type="button"
-                onClick={() => setPhase("intro")}
+                onClick={() => {
+                  exitFullscreen();
+                  setPhase("intro");
+                }}
               >
                 <Home aria-hidden="true" />
                 Home
