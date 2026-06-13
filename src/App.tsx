@@ -1988,88 +1988,109 @@ export function App() {
       {phase === "results" && (
         <section className="results-screen">
           <div className="results-panel">
-            <header className="results-hero">
-              <span className="results-eyebrow">Round complete</span>
-              <h1>{accuracy}% accuracy</h1>
-              <p className="score-display">
-                <strong>{cappedTotalScore}</strong>
-                <span> of {maxScore} points</span>
-              </p>
-            </header>
+            <div className="results-summary">
+              <header className="results-hero">
+                <span className="results-eyebrow">Round complete</span>
+                <h1>{accuracy}% accuracy</h1>
+                <p className="score-display">
+                  <strong>{cappedTotalScore}</strong>
+                  <span> of {maxScore} points</span>
+                </p>
+              </header>
 
-            <div className="results-stats">
-              <div className="stat">
-                <span className="stat-label">Counted</span>
-                <span className="stat-value">{totalPlayer}</span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Actual</span>
-                <span className="stat-value">{totalActual}</span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Off by</span>
-                <span className="stat-value">{totalDelta}</span>
-              </div>
-            </div>
-
-            {qualifiesForHighScore && !hasSubmitted && (
-              <form className="high-score-form" onSubmit={handleScoreSubmit}>
-                <h3>New high score</h3>
-                <p>You made the top 5! Enter your name:</p>
-                <div className="input-group">
-                  <input
-                    type="text"
-                    placeholder="Your name"
-                    value={playerName}
-                    onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
-                    required
-                    disabled={isSubmitting}
-                    className="high-score-input"
-                    maxLength={15}
-                  />
-                  <button
-                    className="primary-action submit-score-btn"
-                    type="submit"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Saving..." : "Submit"}
-                  </button>
+              <div className="results-stats">
+                <div className="stat">
+                  <span className="stat-label">Counted</span>
+                  <span className="stat-value">{totalPlayer}</span>
                 </div>
-                {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
-              </form>
-            )}
-
-            <section className="leaderboard-section">
-              <div className="leaderboard-header">
-                <Trophy aria-hidden="true" />
-                <h2>Top 5 · {DIFFICULTY[difficulty].label}</h2>
+                <div className="stat">
+                  <span className="stat-label">Actual</span>
+                  <span className="stat-value">{totalActual}</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Off by</span>
+                  <span className="stat-value">{totalDelta}</span>
+                </div>
               </div>
 
-              {hasSubmitted && !qualifiesForHighScore && (
-                <p className="leaderboard-message">Score saved. Nice round.</p>
+              {qualifiesForHighScore && !hasSubmitted && (
+                <form className="high-score-form" onSubmit={handleScoreSubmit}>
+                  <h3>New high score</h3>
+                  <p>You made the top 5! Enter your name:</p>
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      placeholder="Your name"
+                      value={playerName}
+                      onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
+                      required
+                      disabled={isSubmitting}
+                      className="high-score-input"
+                      maxLength={15}
+                    />
+                    <button
+                      className="primary-action submit-score-btn"
+                      type="submit"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "Saving..." : "Submit"}
+                    </button>
+                  </div>
+                  {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
+                </form>
               )}
 
-              <div className="leaderboard-list">
-                {isLeaderboardLoading ? (
-                  <p className="leaderboard-message">Loading leaderboard...</p>
-                ) : leaderboardError ? (
-                  <p className="leaderboard-message error-message">{leaderboardError}</p>
-                ) : leaderboard.length === 0 ? (
-                  <p className="leaderboard-message">No high scores yet. Be the first.</p>
-                ) : (
-                  leaderboard.map((item, idx) => (
-                    <div
-                      className={`leaderboard-item rank-${idx + 1}`}
-                      key={item.id}
-                    >
-                      <span className="leaderboard-rank">#{idx + 1}</span>
-                      <span className="leaderboard-name">{item.player_name}</span>
-                      <span className="leaderboard-score">{item.score} pts</span>
-                    </div>
-                  ))
+              <section className="leaderboard-section">
+                <div className="leaderboard-header">
+                  <Trophy aria-hidden="true" />
+                  <h2>Top 5 · {DIFFICULTY[difficulty].label}</h2>
+                </div>
+
+                {hasSubmitted && !qualifiesForHighScore && (
+                  <p className="leaderboard-message">Score saved. Nice round.</p>
                 )}
-              </div>
-            </section>
+
+                <div className="leaderboard-list">
+                  {isLeaderboardLoading ? (
+                    <p className="leaderboard-message">Loading leaderboard...</p>
+                  ) : leaderboardError ? (
+                    <p className="leaderboard-message error-message">{leaderboardError}</p>
+                  ) : leaderboard.length === 0 ? (
+                    <p className="leaderboard-message">No high scores yet. Be the first.</p>
+                  ) : (
+                    leaderboard.map((item, idx) => (
+                      <div
+                        className={`leaderboard-item rank-${idx + 1}`}
+                        key={item.id}
+                      >
+                        <span className="leaderboard-rank">#{idx + 1}</span>
+                        <span className="leaderboard-name">{item.player_name}</span>
+                        <span className="leaderboard-score">{item.score} pts</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <footer className="results-actions">
+                <button
+                  className="primary-action"
+                  type="button"
+                  onClick={() => prepareRound(difficulty)}
+                >
+                  <RotateCcw aria-hidden="true" />
+                  Play again
+                </button>
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => setPhase("intro")}
+                >
+                  <Home aria-hidden="true" />
+                  Home
+                </button>
+              </footer>
+            </div>
 
             <div className="breakdown-wrapper">
               <button
@@ -2108,25 +2129,6 @@ export function App() {
                 </div>
               )}
             </div>
-
-            <footer className="results-actions">
-              <button
-                className="primary-action"
-                type="button"
-                onClick={() => prepareRound(difficulty)}
-              >
-                <RotateCcw aria-hidden="true" />
-                Play again
-              </button>
-              <button
-                className="secondary-action"
-                type="button"
-                onClick={() => setPhase("intro")}
-              >
-                <Home aria-hidden="true" />
-                Home
-              </button>
-            </footer>
           </div>
         </section>
       )}

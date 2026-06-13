@@ -579,22 +579,38 @@ button {
   display: grid;
   place-items: start center;
   overflow: auto;
-  padding: 32px 20px;
+  padding: 24px 20px;
   background:
     linear-gradient(rgba(8, 25, 30, 0.78), rgba(8, 25, 30, 0.94)),
     url("../assets/game_poster.jpg") center / cover;
 }
 
 .results-panel {
-  width: min(720px, 100%);
-  display: flex;
-  flex-direction: column;
+  width: min(1280px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
+  align-items: start;
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 28px;
   background: var(--panel-strong);
   box-shadow: 0 24px 90px rgba(0, 0, 0, 0.34);
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .results-panel {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: 28px;
+    padding: 32px;
+  }
+}
+
+.results-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
 }
 
 .results-hero {
@@ -744,13 +760,23 @@ button {
 .breakdown-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 16px;
   width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .breakdown-wrapper {
+    border-left: 1px solid var(--line);
+    padding-left: 28px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
 }
 
 .breakdown-toggle {
-  align-self: center;
+  align-self: flex-start;
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -769,8 +795,14 @@ button {
 
 .results-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .results-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .result-row {
@@ -1101,6 +1133,12 @@ button {
 
   .results-panel {
     padding: 20px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .breakdown-wrapper {
+    border-left: none;
+    padding-left: 0;
   }
 
   .results-grid {
