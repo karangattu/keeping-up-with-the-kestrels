@@ -970,223 +970,43 @@ button {
   }
 }
 
-/* Fullscreen Toggle HUD button */
-.hud-fullscreen-button {
-  pointer-events: auto;
-  cursor: pointer;
-  color: #f7fbf7;
-  font-family: inherit;
-  font-size: inherit;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-.hud-fullscreen-button:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.4);
-}
-
-/* Offline PWA installation button */
-.install-app-btn {
-  width: fit-content;
-  border-color: rgba(244, 191, 96, 0.5);
-  background: rgba(244, 191, 96, 0.15);
-  color: #f7fbf7;
-  transition: all 0.2s ease;
-}
-.install-app-btn:hover {
-  background: rgba(244, 191, 96, 0.25);
-  border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(244, 191, 96, 0.3);
-}
-
-/* Mobile Portrait Layout Optimization */
-@media (max-width: 768px) {
-  /* Hide orientation lock completely */
-  .orientation-lock {
-    display: none !important;
-  }
-
-  /* Ensure screens are visible in portrait */
+@media (orientation: portrait) {
   .intro-screen,
   .promo-screen,
   .game-screen,
   .results-screen {
-    display: flex !important;
-    flex-direction: column;
+    display: none;
   }
 
-  /* INTRO SCREEN REDESIGN FOR MOBILE */
-  .intro-top-logo {
-    width: 90px;
-    height: 90px;
-    left: 50%;
-    transform: translateX(-50%);
-    top: max(20px, env(safe-area-inset-top));
+  .orientation-lock {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    gap: 14px;
+    padding: 28px;
+    text-align: center;
+    background:
+      linear-gradient(rgba(16, 42, 47, 0.76), rgba(16, 42, 47, 0.94)),
+      url("../assets/game_poster.jpg") center / cover;
   }
 
-  .intro-overlay {
-    bottom: max(20px, env(safe-area-inset-bottom));
-    width: 90%;
-    max-width: 360px;
-    gap: 12px;
-    padding: 12px;
+  .orientation-lock svg {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto;
+    color: var(--accent);
   }
 
-  .difficulty-card {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .orientation-lock h1 {
+    margin: 0;
+    font-size: 2.4rem;
   }
 
-  .difficulty-button {
-    min-height: 46px;
-    font-size: 0.95rem;
-  }
-
-  .primary-action,
-  .secondary-action {
-    width: 100%;
-    min-height: 48px;
-    font-size: 0.95rem;
-  }
-
-  /* HUD REDESIGN FOR MOBILE */
-  .hud {
-    top: max(10px, env(safe-area-inset-top));
-    left: 8px;
-    right: 8px;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .hud-item {
-    min-width: unset;
-    flex: 1 1 auto;
-    padding: 6px 10px;
-    font-size: 0.8rem;
-    gap: 6px;
-    justify-content: center;
-  }
-
-  .hud-item svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  /* TAP PANEL REDESIGN FOR MOBILE */
-  .tap-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 8px !important;
-    padding: 8px !important;
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    background: rgba(8, 25, 30, 0.9) !important;
-    border-top: 1px solid var(--line) !important;
-    border-radius: 16px 16px 0 0 !important;
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4) !important;
-    z-index: 100 !important;
-  }
-
-  .raptor-button {
-    min-height: 48px !important;
-    border-radius: 8px !important;
-    gap: 2px !important;
-    padding: 4px !important;
-  }
-
-  .raptor-button span {
-    font-size: 0.72rem !important;
-    letter-spacing: 0.01em !important;
-  }
-
-  .raptor-button strong {
-    font-size: 1.15rem !important;
-  }
-
-  .button-streak {
-    font-size: 0.6rem !important;
-    top: 2px !important;
-    right: 2px !important;
-    padding: 1px 4px !important;
-  }
-
-  /* TUTORIAL PANEL REDESIGN FOR MOBILE */
-  .tap-panel-tutorial {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    max-width: 95% !important;
-    transform: translateX(-50%) !important;
-    bottom: 16px !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-
-  .tutorial-card {
-    top: max(80px, env(safe-area-inset-top)) !important;
-    padding: 12px 16px !important;
-    gap: 8px !important;
-  }
-
-  .tutorial-card p {
-    font-size: 0.85rem !important;
-  }
-
-  /* RESULTS SCREEN REDESIGN FOR MOBILE */
-  .results-screen {
-    overflow-y: auto !important;
-    padding: 16px 12px !important;
-  }
-
-  .results-panel {
-    padding: 16px !important;
-    gap: 16px !important;
-    border-radius: 12px !important;
-  }
-
-  .results-hero h1 {
-    font-size: 2.2rem !important;
-  }
-
-  .score-display strong {
-    font-size: 1.8rem !important;
-  }
-
-  .results-stats {
-    gap: 6px !important;
-  }
-
-  .stat {
-    min-width: 76px !important;
-    padding: 6px 10px !important;
-  }
-
-  .stat-value {
-    font-size: 1.2rem !important;
-  }
-
-  .results-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 8px !important;
-  }
-
-  .result-row {
-    padding: 8px !important;
-  }
-
-  .result-row h2 {
-    font-size: 0.8rem !important;
-  }
-  
-  .high-score-form {
-    padding: 12px !important;
-  }
-  
-  .input-group {
-    flex-direction: column !important;
-    gap: 8px !important;
-  }
-  
-  .high-score-input, .submit-score-btn {
-    width: 100% !important;
+  .orientation-lock p {
+    max-width: 420px;
+    margin: 0;
+    color: #dceee8;
+    line-height: 1.5;
   }
 }
