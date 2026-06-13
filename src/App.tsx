@@ -1976,7 +1976,7 @@ export function App() {
                 <span className="raptor-button-footer">
                   <strong className="raptor-button-count">{playerCounts[raptor.id]}</strong>
                   {streaks[raptor.id] >= 2 && (
-                    <span className="button-streak">{getMultiplier(streaks[raptor.id])}x streak</span>
+                    <span className="button-streak">{getMultiplier(streaks[raptor.id])}x<span className="button-streak-label"> streak</span></span>
                   )}
                 </span>
               </button>

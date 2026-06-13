@@ -1104,31 +1104,65 @@ button {
     gap: 12px;
   }
 
+  /* Landscape phones have almost no vertical room — collapse the tap panel
+     into a single compact row of 10 so the sky (and the raptors) stay visible. */
   .tap-panel {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-    padding: 10px;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 5px;
+    padding: 6px;
+    border-radius: 12px;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
   }
 
   .raptor-button {
-    min-height: 70px;
-    gap: 8px;
-    padding: 10px 11px;
+    min-height: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 3px;
+    border-radius: 8px;
+  }
+
+  .raptor-button::before {
+    height: 3px;
   }
 
   .raptor-button-name {
-    min-height: 2.35em;
-    font-size: 0.7rem;
+    min-height: 2.1em;
+    font-size: 0.48rem;
+    letter-spacing: 0;
+    line-height: 1.05;
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .raptor-button-footer {
+    justify-content: center;
   }
 
   .raptor-button-count {
-    min-width: 40px;
-    font-size: 1.05rem;
+    min-width: 0;
+    padding: 2px 6px;
+    font-size: 0.95rem;
   }
 
+  /* No room for the full "2x streak" pill — show a compact badge in the corner. */
   .button-streak {
-    font-size: 0.62rem;
-    padding: 3px 6px;
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    font-size: 0.5rem;
+    padding: 1px 4px;
+    line-height: 1;
+  }
+
+  .button-streak .button-streak-label {
+    display: none;
   }
 
   .results-panel {
