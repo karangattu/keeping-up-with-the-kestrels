@@ -418,6 +418,19 @@ button {
   color: var(--accent);
 }
 
+.score-display {
+  margin: 8px 0 0;
+  color: #bedbd3;
+  font-weight: 900;
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+}
+
+.species-points {
+  color: #f0c674;
+  font-weight: 800;
+}
+
 .results-actions {
   display: flex;
   gap: 12px;

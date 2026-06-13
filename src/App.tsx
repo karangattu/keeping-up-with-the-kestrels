@@ -175,18 +175,18 @@ const RAPTORS: Raptor[] = [
 const DIFFICULTY = {
   beginner: {
     label: "Beginner",
-    minBirds: 2,
+    minBirds: 3,
     spawnEvery: [1700, 2400],
-    maxBirds: 3,
+    maxBirds: 4,
     flightDuration: [9000, 12500],
     farScale: [0.1, 0.14],
     nearScale: [0.3, 0.38],
   },
   expert: {
     label: "Expert",
-    minBirds: 3,
+    minBirds: 4,
     spawnEvery: [1050, 1600],
-    maxBirds: 5,
+    maxBirds: 6,
     flightDuration: [8200, 11200],
     farScale: [0.08, 0.13],
     nearScale: [0.25, 0.34],
@@ -288,6 +288,27 @@ export function App() {
   );
 
   const accuracy = totalActual === 0 ? 0 : Math.max(0, Math.round(((totalActual - totalDelta) / totalActual) * 100));
+
+  const scorePerSpecies = useMemo(() => {
+    const multiplier = difficulty === "expert" ? 2 : 1;
+    return RAPTORS.reduce((acc, raptor) => {
+      const delta = Math.abs(playerCounts[raptor.id] - actualCounts[raptor.id]);
+      const base = delta === 0 ? 10 : delta === 1 ? 5 : delta === 2 ? 2 : 0;
+      acc[raptor.id] = base * multiplier;
+      return acc;
+    }, {} as Counts);
+  }, [actualCounts, playerCounts, difficulty]);
+
+  const totalScore = useMemo(
+    () => RAPTORS.reduce((sum, raptor) => sum + scorePerSpecies[raptor.id], 0),
+    [scorePerSpecies],
+  );
+
+  const maxScore = useMemo(() => {
+    const multiplier = difficulty === "expert" ? 2 : 1;
+    const speciesWithBirds = RAPTORS.filter((r) => actualCounts[r.id] > 0).length;
+    return speciesWithBirds * 10 * multiplier;
+  }, [actualCounts, difficulty]);
 
   useEffect(() => {
     const backdrop = new Image();
@@ -661,6 +682,7 @@ export function App() {
               <BarChart3 aria-hidden="true" />
               <div>
                 <h1>{accuracy}% field count accuracy</h1>
+                <p className="score-display">{totalScore} / {maxScore} points</p>
               </div>
             </div>
             <div className="score-strip">
@@ -671,6 +693,7 @@ export function App() {
             <div className="results-grid">
               {RAPTORS.map((raptor) => {
                 const delta = playerCounts[raptor.id] - actualCounts[raptor.id];
+                const points = scorePerSpecies[raptor.id];
                 return (
                   <article className="result-row" key={raptor.id}>
                     <span className="species-dot" style={{ background: raptor.tint }} />
@@ -678,6 +701,7 @@ export function App() {
                     <span>Your count: {playerCounts[raptor.id]}</span>
                     <span>Actual: {actualCounts[raptor.id]}</span>
                     <strong>{delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}</strong>
+                    <span className="species-points">+{points}</span>
                   </article>
                 );
               })}
