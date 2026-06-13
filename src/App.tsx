@@ -667,6 +667,8 @@ export function App() {
     return speciesWithBirds * 10 * multiplier;
   }, [actualCounts, difficulty]);
 
+  const cappedTotalScore = Math.min(totalScore, maxScore);
+
   useEffect(() => {
     const backdrop = new Image();
     backdrop.src = backdropImage;
@@ -1377,7 +1379,7 @@ export function App() {
                 <BarChart3 aria-hidden="true" />
                 <div>
                   <h1>{accuracy}% field count accuracy</h1>
-                  <p className="score-display">{totalScore} / {maxScore} points</p>
+                  <p className="score-display">{cappedTotalScore} / {maxScore} points</p>
                 </div>
               </div>
               <div className="score-strip">
