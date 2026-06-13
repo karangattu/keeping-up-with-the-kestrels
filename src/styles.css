@@ -917,8 +917,10 @@ button {
 
 .tutorial-hand {
   position: absolute;
-  top: -18px;
-  right: 12px;
+  top: calc(100% + 10px);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   display: grid;
   place-items: center;
   width: 38px;
