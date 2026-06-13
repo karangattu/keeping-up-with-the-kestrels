@@ -16,8 +16,8 @@ import { supabase } from "./supabaseClient";
 import introVideo from "../assets/game_intro.mp4";
 import promoVideo from "../assets/promo.mp4";
 import gameSong from "../assets/game_song.mp3";
-import rshaSound from "../assets/RSHA_sound.wav";
-import rthaSound from "../assets/RTHA_sound.wav";
+import rshaSound from "../assets/RSHA_sound.mp3";
+import rthaSound from "../assets/RTHA_sound.mp3";
 import posterImage from "../assets/game_poster.jpg";
 import logoImage from "../assets/SFBBO_Logo_Rounded.png";
 import backdropImage from "../assets/backdrop.png";
@@ -1384,7 +1384,7 @@ export function App() {
         .insert([fullScorePayload]);
       error = insertResult.error;
 
-      if (error && error.message.toLowerCase().includes("column")) {
+      if (error && error.message?.toLowerCase().includes("column")) {
         const retry = await supabase
           .from("kestrel_high_scores")
           .insert([baseScorePayload]);
