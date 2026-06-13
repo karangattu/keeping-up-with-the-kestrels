@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   Clock3,
   Download,
   Gauge,
@@ -34,7 +33,7 @@ import whiteTailedKiteSheet from "../assets/white-tailed-kite-sprite-sheet.png";
 import ospreySheet from "../assets/osprey-sprite-sheet.png";
 
 type Difficulty = "beginner" | "expert";
-type Phase = "intro" | "promo" | "countdown" | "playing" | "results";
+type Phase = "intro" | "promo" | "tutorial" | "countdown" | "playing" | "results";
 
 type HighScore = {
   id: string | number;
@@ -225,15 +224,15 @@ const RED_TAILED_HAWK_FRAMES = framesFromBounds(
 
 const TURKEY_VULTURE_FRAMES = framesFromBounds(
   [
-    [34, 240, 617, 377],
-    [660, 123, 1107, 373],
-    [1216, 58, 1539, 386],
-    [154, 493, 480, 745],
-    [684, 600, 1033, 829],
-    [1211, 607, 1550, 838],
+    [36, 274, 640, 434],
+    [640, 140, 1273, 430],
+    [1396, 66, 1770, 445],
+    [176, 565, 554, 858],
+    [785, 688, 1188, 953],
+    [1391, 696, 1784, 964],
   ],
-  1672,
-  941,
+  1920,
+  1080,
 );
 
 const BALD_EAGLE_FRAMES = framesFromBounds(
@@ -599,6 +598,10 @@ function formatTime(seconds: number) {
 
 export function App() {
   const [phase, setPhase] = useState<Phase>("intro");
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [countdown, setCountdown] = useState(3);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
@@ -614,6 +617,7 @@ export function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameMusicRef = useRef<HTMLAudioElement | null>(null);
   const rthaAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -628,6 +632,7 @@ export function App() {
   const hasSpawnedMaleHarrierRef = useRef(false);
   const animationRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
+  const phaseRef = useRef<Phase>("intro");
 
   const totalActual = useMemo(
     () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + actualCounts[raptor.id], 0),
@@ -977,7 +982,7 @@ export function App() {
     if (phase !== "promo") return undefined;
 
     const fallback = window.setTimeout(() => {
-      setPhase("countdown");
+      setPhase("tutorial");
     }, PROMO_FALLBACK_MS);
 
     return () => window.clearTimeout(fallback);
@@ -999,7 +1004,7 @@ export function App() {
     const audio = gameMusicRef.current;
     if (!audio) return;
 
-    if (phase === "promo" || phase === "countdown" || phase === "playing") {
+    if (phase === "promo" || phase === "tutorial" || phase === "countdown" || phase === "playing") {
       void audio.play().catch(() => undefined);
       return;
     }
@@ -1093,6 +1098,88 @@ export function App() {
     setPhase("intro");
   };
 
+  const completeTutorial = () => {
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    birdsRef.current = [];
+    setPhase("countdown");
+  };
+
+  useEffect(() => {
+    if (phase !== "tutorial") return undefined;
+
+    birdsRef.current = [];
+    startTimeRef.current = 0;
+    lastFrameRef.current = 0;
+
+    const advance = window.setTimeout(completeTutorial, 6000);
+
+    const tick = (timestamp: number) => {
+      if (phaseRef.current !== "tutorial") return;
+      if (!startTimeRef.current) {
+        startTimeRef.current = timestamp;
+        nextSpawnRef.current = timestamp;
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const viewWidth = rect.width;
+          const viewHeight = rect.height;
+          const raptor = RAPTORS.find((r) => r.key === "americanKestrel");
+          if (raptor) {
+            const bird: Bird = {
+              id: birdIdRef.current++,
+              raptorKey: raptor.key,
+              raptorId: raptor.id,
+              flightStyle: "hover",
+              direction: 1,
+              startX: -viewWidth * 0.18,
+              startY: viewHeight * 0.42,
+              hoverX: viewWidth * 0.5,
+              hoverY: viewHeight * 0.36,
+              hoverStart: 0.18,
+              hoverEnd: 0.82,
+              controlX: viewWidth * 0.5,
+              controlY: viewHeight * 0.36,
+              endX: viewWidth * 1.18,
+              endY: viewHeight * 0.42,
+              startedAt: timestamp,
+              duration: 9000,
+              farScale: 0.18,
+              nearScale: 0.42,
+              bank: 0,
+              bob: 2,
+              phase: 0,
+              flapOffset: 0,
+              noiseSeed: 1,
+              soarBias: 0.2,
+              flapCenters: [],
+              altitudePhase: 0,
+              altitudeAmp: viewHeight * 0.03,
+            };
+            bird.flapCenters = generateFlapCenters(bird, SPECIES_BEHAVIOR[raptor.id]);
+            birdsRef.current.push(bird);
+          }
+        }
+      }
+      lastFrameRef.current = timestamp;
+      drawScene(timestamp);
+      animationRef.current = window.requestAnimationFrame(tick);
+    };
+
+    animationRef.current = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.clearTimeout(advance);
+      if (animationRef.current) {
+        window.cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      birdsRef.current = [];
+    };
+  }, [phase, drawScene]);
+
   useEffect(() => {
     if (phase !== "countdown") return undefined;
 
@@ -1146,6 +1233,7 @@ export function App() {
       setSubmitError("");
       setLeaderboardError("");
       setIsLeaderboardLoading(false);
+      setShowBreakdown(false);
       return undefined;
     }
 
@@ -1318,14 +1406,46 @@ export function App() {
             autoPlay
             muted
             playsInline
-            onEnded={() => setPhase("countdown")}
-            onError={() => setPhase("countdown")}
+            onEnded={() => setPhase("tutorial")}
+            onError={() => setPhase("tutorial")}
           />
           <div className="promo-status">
-            <button className="skip-promo-button" type="button" onClick={() => setPhase("countdown")}>
+            <button className="skip-promo-button" type="button" onClick={() => setPhase("tutorial")}>
               <SkipForward aria-hidden="true" />
               Skip promo
             </button>
+          </div>
+        </section>
+      )}
+
+      {phase === "tutorial" && (
+        <section className="game-screen tutorial-screen">
+          <canvas ref={canvasRef} className="game-canvas" aria-label="Tutorial bird flying" />
+          <div className="tutorial-card" role="dialog" aria-live="polite">
+            <strong>How to play</strong>
+            <p>Watch this American Kestrel fly by. When you spot one, tap its name below.</p>
+            <button className="primary-action" type="button" onClick={completeTutorial}>
+              <Play aria-hidden="true" />
+              Start the round
+            </button>
+          </div>
+          <div className="tap-panel tap-panel-tutorial" aria-label="Raptor counters (tutorial)">
+            {UNIQUE_RAPTORS.map((raptor) => {
+              const isSpotlight = raptor.id === "americanKestrel";
+              return (
+                <button
+                  className={`raptor-button ${isSpotlight ? "tutorial-spotlight" : "tutorial-dim"}`}
+                  key={raptor.id}
+                  onClick={isSpotlight ? completeTutorial : undefined}
+                  style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
+                  type="button"
+                  aria-label={isSpotlight ? "Tap to finish tutorial" : raptor.shortName}
+                >
+                  <span>{raptor.shortName}</span>
+                  {isSpotlight && <span className="tutorial-arrow">Tap me!</span>}
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
@@ -1397,20 +1517,88 @@ export function App() {
 
       {phase === "results" && (
         <section className="results-screen">
-          <div className="results-panel results-layout">
-            <div className="results-left">
-              <div className="results-heading">
-                <BarChart3 aria-hidden="true" />
-                <div>
-                  <h1>{accuracy}% field count accuracy</h1>
-                  <p className="score-display">{cappedTotalScore} / {maxScore} points</p>
+          <div className="results-panel">
+            <div className="results-hero">
+              <div className="results-summary">
+                <span className="results-eyebrow">Round complete</span>
+                <h1>{accuracy}% accuracy</h1>
+                <p className="score-display">
+                  <strong>{cappedTotalScore}</strong>
+                  <span> of {maxScore} points</span>
+                </p>
+                <div className="results-actions">
+                  <button
+                    className="primary-action"
+                    type="button"
+                    onClick={() => prepareRound(difficulty)}
+                  >
+                    <RotateCcw aria-hidden="true" />
+                    Play again
+                  </button>
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    onClick={() => setPhase("intro")}
+                  >
+                    <Download aria-hidden="true" />
+                    Home
+                  </button>
                 </div>
               </div>
-              <div className="score-strip">
-                <span>Counted {totalPlayer}</span>
-                <span>Actual {totalActual}</span>
-                <span>Difference {totalDelta}</span>
-              </div>
+
+              {qualifiesForHighScore && !hasSubmitted ? (
+                <form className="high-score-form" onSubmit={handleScoreSubmit}>
+                  <h3>New high score</h3>
+                  <p>You made the top 5. Add your name to the leaderboard.</p>
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      placeholder="Your name"
+                      value={playerName}
+                      onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
+                      required
+                      disabled={isSubmitting}
+                      className="high-score-input"
+                      maxLength={15}
+                    />
+                    <button
+                      className="primary-action submit-score-btn"
+                      type="submit"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "Saving..." : "Submit"}
+                    </button>
+                  </div>
+                  {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
+                </form>
+              ) : (
+                <div className="results-stats">
+                  <div className="stat">
+                    <span className="stat-label">Counted</span>
+                    <span className="stat-value">{totalPlayer}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Actual</span>
+                    <span className="stat-value">{totalActual}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Off by</span>
+                    <span className="stat-value">{totalDelta}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="breakdown-toggle"
+              onClick={() => setShowBreakdown((v) => !v)}
+              aria-expanded={showBreakdown}
+            >
+              {showBreakdown ? "Hide per-species breakdown" : "See per-species breakdown"}
+            </button>
+
+            {showBreakdown && (
               <div className="results-grid">
                 {UNIQUE_RAPTORS.map((raptor) => {
                   const delta = playerCounts[raptor.id] - actualCounts[raptor.id];
@@ -1419,57 +1607,30 @@ export function App() {
                     <article className="result-row" key={raptor.id}>
                       <span className="species-dot" style={{ background: raptor.tint }} />
                       <h2>{raptor.name}</h2>
-                      <span>Your count: {playerCounts[raptor.id]}</span>
-                      <span>Actual: {actualCounts[raptor.id]}</span>
-                      <strong>{delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}</strong>
-                      <span className="species-points">+{points}</span>
+                      <div className="result-row-counts">
+                        <span>You: <strong>{playerCounts[raptor.id]}</strong></span>
+                        <span>Actual: <strong>{actualCounts[raptor.id]}</strong></span>
+                      </div>
+                      <div className="result-row-footer">
+                        <span className="result-row-status">
+                          {delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}
+                        </span>
+                        <span className="species-points">+{points}</span>
+                      </div>
                     </article>
                   );
                 })}
               </div>
-              <div className="results-actions">
-                <button
-                  className="secondary-action"
-                  type="button"
-                  onClick={() => {
-                    prepareRound(difficulty);
-                  }}
-                >
-                  <RotateCcw aria-hidden="true" />
-                  Play again
-                </button>
-                <button className="primary-action" type="button" onClick={() => setPhase("intro")}>
-                  <Download aria-hidden="true" />
-                  Home screen
-                </button>
-              </div>
-            </div>
+            )}
 
-            <div className="results-right leaderboard-section">
+            <section className="leaderboard-section">
               <div className="leaderboard-header">
                 <Trophy aria-hidden="true" />
-                <h2>Top 5 High Scores</h2>
+                <h2>Top 5 · {DIFFICULTY[difficulty].label}</h2>
               </div>
 
-              {qualifiesForHighScore && !hasSubmitted && (
-                <form className="high-score-form" onSubmit={handleScoreSubmit}>
-                  <h3>New High Score!</h3>
-                  <div className="input-group">
-                    <input
-                      type="text"
-                      placeholder="Your Name"
-                      value={playerName}
-                      onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
-                      required
-                      disabled={isSubmitting}
-                      className="high-score-input"
-                    />
-                    <button className="primary-action submit-score-btn" type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? "Saving..." : "Submit"}
-                    </button>
-                  </div>
-                  {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
-                </form>
+              {hasSubmitted && !qualifiesForHighScore && (
+                <p className="leaderboard-message">Score saved. Nice round.</p>
               )}
 
               <div className="leaderboard-list">
@@ -1478,7 +1639,7 @@ export function App() {
                 ) : leaderboardError ? (
                   <p className="leaderboard-message error-message">{leaderboardError}</p>
                 ) : leaderboard.length === 0 ? (
-                  <p className="leaderboard-message">No high scores yet.</p>
+                  <p className="leaderboard-message">No high scores yet. Be the first.</p>
                 ) : (
                   leaderboard.map((item, idx) => (
                     <div
@@ -1492,7 +1653,7 @@ export function App() {
                   ))
                 )}
               </div>
-            </div>
+            </section>
           </div>
         </section>
       )}
