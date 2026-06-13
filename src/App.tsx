@@ -235,12 +235,12 @@ const RED_TAILED_HAWK_FRAMES = framesFromBounds(
 
 const TURKEY_VULTURE_FRAMES = framesFromBounds(
   [
-    [36, 274, 640, 434],
-    [640, 140, 1273, 430],
-    [1396, 66, 1770, 445],
-    [176, 565, 554, 858],
-    [785, 688, 1188, 953],
-    [1391, 696, 1784, 964],
+    [36, 274, 530, 433],
+    [757, 140, 1272, 429],
+    [1396, 66, 1769, 444],
+    [176, 565, 553, 857],
+    [785, 688, 1187, 952],
+    [1391, 696, 1783, 963],
   ],
   1920,
   1080,
@@ -829,15 +829,17 @@ export function App() {
 
     birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
 
-    const config = DIFFICULTY[difficulty];
-    while (birdsRef.current.length < config.minBirds) {
-      spawnBird(viewWidth, viewHeight, timestamp - randomBetween([0, 2400]));
-      nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery) * 0.55;
-    }
+    if (phase === "playing") {
+      const config = DIFFICULTY[difficulty];
+      while (birdsRef.current.length < config.minBirds) {
+        spawnBird(viewWidth, viewHeight, timestamp - randomBetween([0, 2400]));
+        nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery) * 0.55;
+      }
 
-    if (timestamp >= nextSpawnRef.current && birdsRef.current.length < config.maxBirds) {
-      spawnBird(viewWidth, viewHeight, timestamp);
-      nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery);
+      if (timestamp >= nextSpawnRef.current && birdsRef.current.length < config.maxBirds) {
+        spawnBird(viewWidth, viewHeight, timestamp);
+        nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery);
+      }
     }
 
     const wind = getWind(timestamp);
@@ -1582,109 +1584,55 @@ export function App() {
       {phase === "results" && (
         <section className="results-screen">
           <div className="results-panel">
-            <div className="results-hero">
-              <div className="results-summary">
-                <span className="results-eyebrow">Round complete</span>
-                <h1>{accuracy}% accuracy</h1>
-                <p className="score-display">
-                  <strong>{cappedTotalScore}</strong>
-                  <span> of {maxScore} points</span>
-                </p>
-                <div className="results-actions">
-                  <button
-                    className="primary-action"
-                    type="button"
-                    onClick={() => prepareRound(difficulty)}
-                  >
-                    <RotateCcw aria-hidden="true" />
-                    Play again
-                  </button>
-                  <button
-                    className="secondary-action"
-                    type="button"
-                    onClick={() => setPhase("intro")}
-                  >
-                    <Home aria-hidden="true" />
-                    Home
-                  </button>
-                </div>
-              </div>
+            <header className="results-hero">
+              <span className="results-eyebrow">Round complete</span>
+              <h1>{accuracy}% accuracy</h1>
+              <p className="score-display">
+                <strong>{cappedTotalScore}</strong>
+                <span> of {maxScore} points</span>
+              </p>
+            </header>
 
-              {qualifiesForHighScore && !hasSubmitted ? (
-                <form className="high-score-form" onSubmit={handleScoreSubmit}>
-                  <h3>New high score</h3>
-                  <p>You made the top 5. Add your name to the leaderboard.</p>
-                  <div className="input-group">
-                    <input
-                      type="text"
-                      placeholder="Your name"
-                      value={playerName}
-                      onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
-                      required
-                      disabled={isSubmitting}
-                      className="high-score-input"
-                      maxLength={15}
-                    />
-                    <button
-                      className="primary-action submit-score-btn"
-                      type="submit"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? "Saving..." : "Submit"}
-                    </button>
-                  </div>
-                  {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
-                </form>
-              ) : (
-                <div className="results-stats">
-                  <div className="stat">
-                    <span className="stat-label">Counted</span>
-                    <span className="stat-value">{totalPlayer}</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-label">Actual</span>
-                    <span className="stat-value">{totalActual}</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-label">Off by</span>
-                    <span className="stat-value">{totalDelta}</span>
-                  </div>
-                </div>
-              )}
+            <div className="results-stats">
+              <div className="stat">
+                <span className="stat-label">Counted</span>
+                <span className="stat-value">{totalPlayer}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Actual</span>
+                <span className="stat-value">{totalActual}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Off by</span>
+                <span className="stat-value">{totalDelta}</span>
+              </div>
             </div>
 
-            <button
-              type="button"
-              className="breakdown-toggle"
-              onClick={() => setShowBreakdown((v) => !v)}
-              aria-expanded={showBreakdown}
-            >
-              {showBreakdown ? "Hide per-species breakdown" : "See per-species breakdown"}
-            </button>
-
-            {showBreakdown && (
-              <div className="results-grid">
-                {UNIQUE_RAPTORS.map((raptor) => {
-                  const delta = playerCounts[raptor.id] - actualCounts[raptor.id];
-                  const points = scorePerSpecies[raptor.id];
-                  return (
-                    <article className="result-row" key={raptor.id}>
-                      <span className="species-dot" style={{ background: raptor.tint }} />
-                      <h2>{raptor.name}</h2>
-                      <div className="result-row-counts">
-                        <span>You: <strong>{playerCounts[raptor.id]}</strong></span>
-                        <span>Actual: <strong>{actualCounts[raptor.id]}</strong></span>
-                      </div>
-                      <div className="result-row-footer">
-                        <span className="result-row-status">
-                          {delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}
-                        </span>
-                        <span className="species-points">+{points}</span>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
+            {qualifiesForHighScore && !hasSubmitted && (
+              <form className="high-score-form" onSubmit={handleScoreSubmit}>
+                <h3>New high score</h3>
+                <p>You made the top 5! Enter your name:</p>
+                <div className="input-group">
+                  <input
+                    type="text"
+                    placeholder="Your name"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
+                    required
+                    disabled={isSubmitting}
+                    className="high-score-input"
+                    maxLength={15}
+                  />
+                  <button
+                    className="primary-action submit-score-btn"
+                    type="submit"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Saving..." : "Submit"}
+                  </button>
+                </div>
+                {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
+              </form>
             )}
 
             <section className="leaderboard-section">
@@ -1718,6 +1666,61 @@ export function App() {
                 )}
               </div>
             </section>
+
+            <div className="breakdown-wrapper">
+              <button
+                type="button"
+                className="breakdown-toggle"
+                onClick={() => setShowBreakdown((v) => !v)}
+                aria-expanded={showBreakdown}
+              >
+                {showBreakdown ? "Hide per-species breakdown" : "See per-species breakdown"}
+              </button>
+
+              {showBreakdown && (
+                <div className="results-grid">
+                  {UNIQUE_RAPTORS.map((raptor) => {
+                    const delta = playerCounts[raptor.id] - actualCounts[raptor.id];
+                    const points = scorePerSpecies[raptor.id];
+                    return (
+                      <article className="result-row" key={raptor.id}>
+                        <span className="species-dot" style={{ background: raptor.tint }} />
+                        <h2>{raptor.name}</h2>
+                        <div className="result-row-counts">
+                          <span>You: <strong>{playerCounts[raptor.id]}</strong></span>
+                          <span>Actual: <strong>{actualCounts[raptor.id]}</strong></span>
+                        </div>
+                        <div className="result-row-footer">
+                          <span className="result-row-status">
+                            {delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}
+                          </span>
+                          <span className="species-points">+{points}</span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <footer className="results-actions">
+              <button
+                className="primary-action"
+                type="button"
+                onClick={() => prepareRound(difficulty)}
+              >
+                <RotateCcw aria-hidden="true" />
+                Play again
+              </button>
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => setPhase("intro")}
+              >
+                <Home aria-hidden="true" />
+                Home
+              </button>
+            </footer>
           </div>
         </section>
       )}
