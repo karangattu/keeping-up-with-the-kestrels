@@ -1,7 +1,7 @@
 import {
   Clock3,
-  Download,
   Gauge,
+  Home,
   Play,
   RotateCcw,
   SkipForward,
@@ -402,6 +402,10 @@ const RAPTORS: Raptor[] = [
 
 const UNIQUE_RAPTORS = RAPTORS.filter(
   (raptor, index, arr) => arr.findIndex((r) => r.id === raptor.id) === index
+);
+
+const TUTORIAL_RAPTORS = UNIQUE_RAPTORS.filter(
+  (raptor) => raptor.id === "americanKestrel" || raptor.id === "redTailedHawk" || raptor.id === "turkeyVulture"
 );
 
 const SPAWN_RAPTORS = RAPTORS.filter((raptor) => raptor.key !== "northernHarrierMale");
@@ -1114,8 +1118,6 @@ export function App() {
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
 
-    const advance = window.setTimeout(completeTutorial, 6000);
-
     const tick = (timestamp: number) => {
       if (phaseRef.current !== "tutorial") return;
       if (!startTimeRef.current) {
@@ -1171,7 +1173,6 @@ export function App() {
     animationRef.current = window.requestAnimationFrame(tick);
 
     return () => {
-      window.clearTimeout(advance);
       if (animationRef.current) {
         window.cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
@@ -1425,12 +1426,12 @@ export function App() {
             <strong>How to play</strong>
             <p>Watch this American Kestrel fly by. When you spot one, tap its name below.</p>
             <button className="primary-action" type="button" onClick={completeTutorial}>
-              <Play aria-hidden="true" />
-              Start the round
+              <SkipForward aria-hidden="true" />
+              Skip tutorial
             </button>
           </div>
           <div className="tap-panel tap-panel-tutorial" aria-label="Raptor counters (tutorial)">
-            {UNIQUE_RAPTORS.map((raptor) => {
+            {TUTORIAL_RAPTORS.map((raptor) => {
               const isSpotlight = raptor.id === "americanKestrel";
               return (
                 <button
@@ -1540,7 +1541,7 @@ export function App() {
                     type="button"
                     onClick={() => setPhase("intro")}
                   >
-                    <Download aria-hidden="true" />
+                    <Home aria-hidden="true" />
                     Home
                   </button>
                 </div>
