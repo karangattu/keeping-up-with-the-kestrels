@@ -1697,7 +1697,7 @@ export function App() {
             </div>
             <button className="primary-action" type="button" onPointerDown={startGameMusic} onClick={() => prepareRound()}>
               <Play aria-hidden="true" />
-              Start 60-second round
+              Start round
             </button>
           </div>
         </section>
