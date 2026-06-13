@@ -358,6 +358,26 @@ button {
   border-color: rgba(255, 140, 140, 0.55);
 }
 
+.hud-timer.warning {
+  color: #ffe1d6;
+  border-color: rgba(255, 120, 100, 0.7);
+  background: rgba(122, 28, 24, 0.78);
+  animation: hud-timer-pulse 0.6s ease-in-out infinite alternate;
+}
+
+.hud-timer.warning svg {
+  color: #ffb09a;
+}
+
+@keyframes hud-timer-pulse {
+  from {
+    box-shadow: 0 18px 40px rgba(122, 28, 24, 0.2);
+  }
+  to {
+    box-shadow: 0 18px 40px rgba(255, 90, 70, 0.55);
+  }
+}
+
 .tap-panel {
   position: absolute;
   right: max(16px, env(safe-area-inset-right));

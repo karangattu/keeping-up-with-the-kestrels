@@ -691,6 +691,41 @@ function formatTime(seconds: number) {
   return `0:${String(clamped).padStart(2, "0")}`;
 }
 
+const LAST_SECONDS_WARNING = 10;
+
+let audioContextRef: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (audioContextRef) return audioContextRef;
+  const Ctor =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctor) return null;
+  audioContextRef = new Ctor();
+  return audioContextRef;
+}
+
+function playBeep(frequency = 880, durationMs = 220, peakGain = 0.18) {
+  const context = getAudioContext();
+  if (!context) return;
+  if (context.state === "suspended") {
+    void context.resume().catch(() => undefined);
+  }
+  const now = context.currentTime;
+  const osc = context.createOscillator();
+  const gain = context.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(frequency, now);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(peakGain, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+  osc.connect(gain);
+  gain.connect(context.destination);
+  osc.start(now);
+  osc.stop(now + durationMs / 1000 + 0.02);
+}
+
 export function App() {
   const [phase, setPhase] = useState<Phase>("intro");
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -778,6 +813,7 @@ export function App() {
   const thermalBirdsRef = useRef<ThermalBird[]>([]);
   const actualCountsRef = useRef<Counts>(makeCounts());
   const startTimeRef = useRef(0);
+  const warningPlayedRef = useRef(false);
   const nextSpawnRef = useRef(0);
   const nextThermalSpawnRef = useRef(0);
   const birdIdRef = useRef(0);
@@ -1255,6 +1291,8 @@ export function App() {
   useEffect(() => {
     if (phase !== "playing") return undefined;
 
+    warningPlayedRef.current = false;
+
     const tick = (timestamp: number) => {
       if (!startTimeRef.current) {
         startTimeRef.current = timestamp;
@@ -1269,6 +1307,12 @@ export function App() {
 
       drawScene(timestamp);
       setTimeLeft(remaining);
+
+      if (remaining <= LAST_SECONDS_WARNING && !warningPlayedRef.current) {
+        warningPlayedRef.current = true;
+        playBeep(880, 220, 0.2);
+        window.setTimeout(() => playBeep(660, 220, 0.2), 260);
+      }
 
       if (remaining <= 0) {
         setActualCounts({ ...actualCountsRef.current });
@@ -1894,7 +1938,7 @@ export function App() {
             </div>
           )}
           <header className="hud">
-            <div className="hud-item">
+            <div className={timeLeft <= LAST_SECONDS_WARNING ? "hud-item hud-timer warning" : "hud-item hud-timer"}>
               <Clock3 aria-hidden="true" />
               <span>{formatTime(timeLeft)}</span>
             </div>
