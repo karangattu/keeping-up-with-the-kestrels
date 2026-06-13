@@ -8,8 +8,10 @@ import {
   SkipForward,
   Smartphone,
   Target,
+  Trophy,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "./supabaseClient";
 import introVideo from "../assets/game_intro.mp4";
 import promoVideo from "../assets/promo.mp4";
 import posterImage from "../assets/game_poster.jpg";
@@ -25,6 +27,14 @@ import northernHarrierSheet from "../assets/northern-harrier-sprite-sheet.png";
 
 type Difficulty = "beginner" | "expert";
 type Phase = "intro" | "promo" | "countdown" | "playing" | "results";
+
+type HighScore = {
+  id: string | number;
+  player_name: string;
+  score: number;
+  level: Difficulty;
+  created_at: string;
+};
 
 type RaptorId =
   | "americanKestrel"
@@ -261,6 +271,11 @@ export function App() {
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
+  const [leaderboard, setLeaderboard] = useState<HighScore[]>([]);
+  const [qualifiesForHighScore, setQualifiesForHighScore] = useState(false);
+  const [playerName, setPlayerName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const backdropRef = useRef<HTMLImageElement | null>(null);
   const imageMapRef = useRef<Record<RaptorId, SpriteAsset> | null>(null);
@@ -572,6 +587,77 @@ export function App() {
     return () => window.clearInterval(interval);
   }, [phase]);
 
+  const fetchLeaderboard = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("kestrel_high_scores")
+      .select("*")
+      .eq("level", difficulty)
+      .order("score", { ascending: false })
+      .limit(5);
+    if (!error && data) {
+      setLeaderboard(data);
+      if (phase === "results") {
+        const qualifies = data.length < 5 || totalScore > (data[data.length - 1]?.score ?? 0);
+        setQualifiesForHighScore(qualifies && totalScore > 0);
+      }
+    }
+  }, [difficulty, phase, totalScore]);
+
+  useEffect(() => {
+    if (phase !== "results") {
+      setQualifiesForHighScore(false);
+      setHasSubmitted(false);
+      setPlayerName("");
+      return undefined;
+    }
+
+    fetchLeaderboard();
+
+    const channel = supabase
+      .channel("high_scores_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "kestrel_high_scores" },
+        () => {
+          fetchLeaderboard();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [phase, fetchLeaderboard]);
+
+  const handleScoreSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!playerName.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    const { error } = await supabase
+      .from("kestrel_high_scores")
+      .insert([
+        {
+          player_name: playerName.trim(),
+          score: totalScore,
+          level: difficulty,
+          accuracy,
+          total_counted: totalPlayer,
+          total_actual: totalActual,
+          kestrel_count: playerCounts.americanKestrel,
+          coopers_hawk_count: playerCounts.coopersHawk,
+          golden_eagle_count: playerCounts.goldenEagle,
+          northern_harrier_count: playerCounts.northernHarrier,
+          red_shouldered_hawk_count: playerCounts.redShoulderedHawk,
+          red_tailed_hawk_count: playerCounts.redTailedHawk,
+          turkey_vulture_count: playerCounts.turkeyVulture,
+        },
+      ]);
+    setIsSubmitting(false);
+    if (!error) {
+      setHasSubmitted(true);
+    }
+  };
+
   const countRaptor = (raptorId: RaptorId) => {
     if (phase !== "playing") return;
     setPlayerCounts((current) => ({
@@ -677,50 +763,96 @@ export function App() {
 
       {phase === "results" && (
         <section className="results-screen">
-          <div className="results-panel">
-            <div className="results-heading">
-              <BarChart3 aria-hidden="true" />
-              <div>
-                <h1>{accuracy}% field count accuracy</h1>
-                <p className="score-display">{totalScore} / {maxScore} points</p>
+          <div className="results-panel results-layout">
+            <div className="results-left">
+              <div className="results-heading">
+                <BarChart3 aria-hidden="true" />
+                <div>
+                  <h1>{accuracy}% field count accuracy</h1>
+                  <p className="score-display">{totalScore} / {maxScore} points</p>
+                </div>
+              </div>
+              <div className="score-strip">
+                <span>Counted {totalPlayer}</span>
+                <span>Actual {totalActual}</span>
+                <span>Difference {totalDelta}</span>
+              </div>
+              <div className="results-grid">
+                {RAPTORS.map((raptor) => {
+                  const delta = playerCounts[raptor.id] - actualCounts[raptor.id];
+                  const points = scorePerSpecies[raptor.id];
+                  return (
+                    <article className="result-row" key={raptor.id}>
+                      <span className="species-dot" style={{ background: raptor.tint }} />
+                      <h2>{raptor.name}</h2>
+                      <span>Your count: {playerCounts[raptor.id]}</span>
+                      <span>Actual: {actualCounts[raptor.id]}</span>
+                      <strong>{delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}</strong>
+                      <span className="species-points">+{points}</span>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="results-actions">
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => {
+                    prepareRound(difficulty);
+                  }}
+                >
+                  <RotateCcw aria-hidden="true" />
+                  Play again
+                </button>
+                <button className="primary-action" type="button" onClick={() => setPhase("intro")}>
+                  <Download aria-hidden="true" />
+                  Home screen
+                </button>
               </div>
             </div>
-            <div className="score-strip">
-              <span>Counted {totalPlayer}</span>
-              <span>Actual {totalActual}</span>
-              <span>Difference {totalDelta}</span>
-            </div>
-            <div className="results-grid">
-              {RAPTORS.map((raptor) => {
-                const delta = playerCounts[raptor.id] - actualCounts[raptor.id];
-                const points = scorePerSpecies[raptor.id];
-                return (
-                  <article className="result-row" key={raptor.id}>
-                    <span className="species-dot" style={{ background: raptor.tint }} />
-                    <h2>{raptor.name}</h2>
-                    <span>Your count: {playerCounts[raptor.id]}</span>
-                    <span>Actual: {actualCounts[raptor.id]}</span>
-                    <strong>{delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}</strong>
-                    <span className="species-points">+{points}</span>
-                  </article>
-                );
-              })}
-            </div>
-            <div className="results-actions">
-              <button
-                className="secondary-action"
-                type="button"
-                onClick={() => {
-                  prepareRound(difficulty);
-                }}
-              >
-                <RotateCcw aria-hidden="true" />
-                Play again
-              </button>
-              <button className="primary-action" type="button" onClick={() => setPhase("intro")}>
-                <Download aria-hidden="true" />
-                Home screen
-              </button>
+
+            <div className="results-right leaderboard-section">
+              <div className="leaderboard-header">
+                <Trophy aria-hidden="true" />
+                <h2>Top 5 High Scores</h2>
+              </div>
+
+              {qualifiesForHighScore && !hasSubmitted && (
+                <form className="high-score-form" onSubmit={handleScoreSubmit}>
+                  <h3>New High Score!</h3>
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      placeholder="Your Name"
+                      value={playerName}
+                      onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
+                      required
+                      disabled={isSubmitting}
+                      className="high-score-input"
+                    />
+                    <button className="primary-action submit-score-btn" type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? "Saving..." : "Submit"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="leaderboard-list">
+                {leaderboard.length === 0 ? (
+                  <p className="no-scores">Loading leaderboard...</p>
+                ) : (
+                  leaderboard.map((item, idx) => (
+                    <div
+                      className={`leaderboard-item rank-${idx + 1}`}
+                      key={item.id}
+                    >
+                      <span className="leaderboard-rank">#{idx + 1}</span>
+                      <span className="leaderboard-name">{item.player_name}</span>
+                      <span className="leaderboard-score">{item.score} pts</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </section>
