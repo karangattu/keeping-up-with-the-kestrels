@@ -690,15 +690,23 @@ export function App() {
   const scorePerSpecies = useMemo(() => {
     const multiplier = difficulty === "expert" ? 2 : 1;
     return UNIQUE_RAPTORS.reduce((acc, raptor) => {
-      const delta = Math.abs(playerCounts[raptor.id] - actualCounts[raptor.id]);
-      const base = delta === 0 ? 10 : delta === 1 ? 5 : delta === 2 ? 2 : 0;
-      acc[raptor.id] = base * multiplier;
+      const actual = actualCounts[raptor.id];
+      const player = playerCounts[raptor.id];
+      const delta = Math.abs(player - actual);
+      if (actual > 0) {
+        const base = delta === 0 ? 10 : delta === 1 ? 5 : delta === 2 ? 2 : 0;
+        acc[raptor.id] = base * multiplier;
+      } else {
+        // Penalty for over-counting species that were not present in the round
+        const base = delta === 0 ? 0 : delta === 1 ? -5 : delta === 2 ? -8 : -10;
+        acc[raptor.id] = base * multiplier;
+      }
       return acc;
     }, {} as Counts);
   }, [actualCounts, playerCounts, difficulty]);
 
   const totalScore = useMemo(
-    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + scorePerSpecies[raptor.id], 0),
+    () => Math.max(0, UNIQUE_RAPTORS.reduce((sum, raptor) => sum + scorePerSpecies[raptor.id], 0)),
     [scorePerSpecies],
   );
 
@@ -1740,7 +1748,9 @@ export function App() {
                           <span className="result-row-status">
                             {delta === 0 ? "Exact" : delta > 0 ? `Over by ${delta}` : `Under by ${Math.abs(delta)}`}
                           </span>
-                          <span className="species-points">+{points}</span>
+                          <span className="species-points">
+                            {points >= 0 ? `+${points}` : points}
+                          </span>
                         </div>
                       </article>
                     );
