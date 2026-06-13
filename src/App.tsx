@@ -1817,11 +1817,13 @@ export function App() {
                 style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
                 type="button"
               >
-                <span>{raptor.shortName}</span>
-                <strong>{playerCounts[raptor.id]}</strong>
-                {streaks[raptor.id] >= 2 && (
-                  <span className="button-streak">{getMultiplier(streaks[raptor.id])}x</span>
-                )}
+                <span className="raptor-button-name">{raptor.shortName}</span>
+                <span className="raptor-button-footer">
+                  <strong className="raptor-button-count">{playerCounts[raptor.id]}</strong>
+                  {streaks[raptor.id] >= 2 && (
+                    <span className="button-streak">{getMultiplier(streaks[raptor.id])}x streak</span>
+                  )}
+                </span>
               </button>
             ))}
           </div>
