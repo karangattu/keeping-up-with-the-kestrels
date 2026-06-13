@@ -1017,23 +1017,31 @@ export function App() {
         if (!sprite?.ready || sprite.width === 0) return null;
 
         const progress = Math.min(1, Math.max(0, (timestamp - bird.startedAt) / bird.duration));
-        // Ease the crossing so it accelerates in and decelerates out instead of marching at constant speed.
-        const eased = progress * progress * (3 - 2 * progress);
-        const loopAngle = bird.turnDirection * (bird.glidePhase + progress * bird.loopCount * Math.PI * 2);
-        // Steady drift across the band with lazy circling looped on top.
-        const x = lerp(bird.startX, bird.endX, eased) + Math.cos(loopAngle) * bird.loopAmpX;
-        const unclampedY = bird.baseY
-          + Math.sin(progress * Math.PI * 2 + bird.glidePhase) * bird.glideAmp
-          + Math.sin(loopAngle) * bird.loopAmpY
-          + Math.sin(progress * Math.PI * 6 + bird.altitudePhase) * bird.altitudeAmp;
-        const y = clamp(unclampedY, viewHeight * THERMAL_TOP_BAND.min, viewHeight * THERMAL_TOP_BAND.max);
+        // Position along the soaring path: a steady crossing with lazy circling
+        // looped on top. Factored out so we can sample it slightly ahead to find
+        // the heading and keep the bird's head pointed where it's going.
+        const positionAt = (p: number) => {
+          const eased = p * p * (3 - 2 * p);
+          const loopAngle = bird.turnDirection * (bird.glidePhase + p * bird.loopCount * Math.PI * 2);
+          const px = lerp(bird.startX, bird.endX, eased) + Math.cos(loopAngle) * bird.loopAmpX;
+          const py = bird.baseY
+            + Math.sin(p * Math.PI * 2 + bird.glidePhase) * bird.glideAmp
+            + Math.sin(loopAngle) * bird.loopAmpY
+            + Math.sin(p * Math.PI * 6 + bird.altitudePhase) * bird.altitudeAmp;
+          return { px, py };
+        };
+
+        const here = positionAt(progress);
+        const ahead = positionAt(Math.min(1, progress + 0.004));
+        const x = here.px;
+        const y = clamp(here.py, viewHeight * THERMAL_TOP_BAND.min, viewHeight * THERMAL_TOP_BAND.max);
         // Fade in/out near the edges so birds don't pop on and off screen.
         const fadeEnvelope = clamp(Math.min(progress, 1 - progress) / 0.12, 0, 1);
         const scale = bird.baseScale * bird.sizeRatio;
-        // Bank into the circling turns and add a faint teeter.
-        const rotation = bird.direction * 0.05
-          + bird.turnDirection * 0.07 * Math.cos(loopAngle + bird.bankPhase)
-          + Math.sin(progress * Math.PI * 4 + bird.bankPhase) * bird.wobble;
+        // Point the head (sprite's "up") along the direction of travel, plus a
+        // faint teeter so it doesn't look rigidly locked to the path.
+        const heading = Math.atan2(ahead.py - here.py, ahead.px - here.px) + Math.PI / 2;
+        const rotation = heading + Math.sin(progress * Math.PI * 4 + bird.bankPhase) * bird.wobble;
         const alpha = bird.alpha * fadeEnvelope;
 
         return {
@@ -1267,29 +1275,42 @@ export function App() {
     if (rtha) rtha.volume = 0.15;
     if (rsha) rsha.volume = 0.15;
 
+    // Play the ambient intro calls whenever we're on the home screen *and* audio
+    // is unlocked. Read phase from the ref so a gesture firing right as the phase
+    // flips still sees the current value.
     const playIntroSounds = () => {
-      if (phase === "intro") {
-        void rtha?.play().catch(() => undefined);
-        void rsha?.play().catch(() => undefined);
-      }
+      if (phaseRef.current !== "intro") return;
+      void rtha?.play().catch(() => undefined);
+      void rsha?.play().catch(() => undefined);
     };
 
     if (phase === "intro") {
       playIntroSounds();
-      window.addEventListener("pointerdown", playIntroSounds);
-      window.addEventListener("keydown", playIntroSounds);
     } else {
       rtha?.pause();
       if (rtha) rtha.currentTime = 0;
       rsha?.pause();
       if (rsha) rsha.currentTime = 0;
     }
-
-    return () => {
-      window.removeEventListener("pointerdown", playIntroSounds);
-      window.removeEventListener("keydown", playIntroSounds);
-    };
   }, [phase]);
+
+  // On a fresh load the browser blocks audio.play() until the first user gesture,
+  // which is usually the click that leaves the intro — so the intro calls never
+  // got a chance. Register a one-time, phase-independent unlock that retries the
+  // intro sounds the moment the user first interacts with the page.
+  useEffect(() => {
+    const unlock = () => {
+      if (phaseRef.current !== "intro") return;
+      void rthaAudioRef.current?.play().catch(() => undefined);
+      void rshaAudioRef.current?.play().catch(() => undefined);
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   const startGameMusic = () => {
     const audio = gameMusicRef.current;
