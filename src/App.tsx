@@ -24,6 +24,10 @@ import redShoulderedHawkSheet from "../assets/red-shouldered-hawk-sprite-sheet.p
 import redTailedHawkSheet from "../assets/red-tailed-hawk-sprite-sheet.png";
 import turkeyVultureSheet from "../assets/turkey-vulture-sprite-sheet.png";
 import northernHarrierSheet from "../assets/northern-harrier-sprite-sheet.png";
+import northernHarrierMaleSheet from "../assets/northern-harrier-male-sprite-sheet.png";
+import baldEagleSheet from "../assets/bald-eagle-sprite-sheet.png";
+import whiteTailedKiteSheet from "../assets/white-tailed-kite-sprite-sheet.png";
+import ospreySheet from "../assets/osprey-sprite-sheet.png";
 
 type Difficulty = "beginner" | "expert";
 type Phase = "intro" | "promo" | "countdown" | "playing" | "results";
@@ -43,7 +47,10 @@ type RaptorId =
   | "northernHarrier"
   | "redShoulderedHawk"
   | "redTailedHawk"
-  | "turkeyVulture";
+  | "turkeyVulture"
+  | "baldEagle"
+  | "whiteTailedKite"
+  | "osprey";
 
 type Frame = { sx: number; sy: number; sw: number; sh: number };
 
@@ -77,6 +84,11 @@ type Bird = {
   bob: number;
   phase: number;
   flapOffset: number;
+  noiseSeed: number;
+  soarBias: number;
+  flapCenters: number[];
+  altitudePhase: number;
+  altitudeAmp: number;
 };
 
 type SpriteAsset = {
@@ -114,13 +126,16 @@ const EMPTY_COUNTS: Counts = {
   redShoulderedHawk: 0,
   redTailedHawk: 0,
   turkeyVulture: 0,
+  baldEagle: 0,
+  whiteTailedKite: 0,
+  osprey: 0,
 };
 
 const RAPTORS: Raptor[] = [
   {
     id: "americanKestrel",
     name: "American Kestrel",
-    shortName: "Kestrel",
+    shortName: "American Kestrel",
     sheet: americanKestrelSheet,
     tint: "#e8a84c",
     frames: HAWK_FRAMES,
@@ -129,7 +144,7 @@ const RAPTORS: Raptor[] = [
   {
     id: "coopersHawk",
     name: "Cooper's Hawk",
-    shortName: "Cooper's",
+    shortName: "Cooper's Hawk",
     sheet: coopersHawkSheet,
     tint: "#8ca6a9",
     frames: HAWK_FRAMES,
@@ -138,7 +153,7 @@ const RAPTORS: Raptor[] = [
   {
     id: "goldenEagle",
     name: "Golden Eagle",
-    shortName: "Eagle",
+    shortName: "Golden Eagle",
     sheet: goldenEagleSheet,
     tint: "#6b5c43",
     frames: HAWK_FRAMES,
@@ -147,16 +162,25 @@ const RAPTORS: Raptor[] = [
   {
     id: "northernHarrier",
     name: "Northern Harrier",
-    shortName: "Harrier",
+    shortName: "Northern Harrier",
     sheet: northernHarrierSheet,
     tint: "#ab8660",
     frames: HARRIER_FRAMES,
     sizeScale: 0.94,
   },
   {
+    id: "northernHarrier",
+    name: "Northern Harrier (Male)",
+    shortName: "Northern Harrier",
+    sheet: northernHarrierMaleSheet,
+    tint: "#8a9ba8",
+    frames: HARRIER_FRAMES,
+    sizeScale: 0.9,
+  },
+  {
     id: "redShoulderedHawk",
     name: "Red-shouldered Hawk",
-    shortName: "Red-shouldered",
+    shortName: "Red-shouldered Hawk",
     sheet: redShoulderedHawkSheet,
     tint: "#c35a32",
     frames: HAWK_FRAMES,
@@ -165,7 +189,7 @@ const RAPTORS: Raptor[] = [
   {
     id: "redTailedHawk",
     name: "Red-tailed Hawk",
-    shortName: "Red-tailed",
+    shortName: "Red-tailed Hawk",
     sheet: redTailedHawkSheet,
     tint: "#d68538",
     frames: HAWK_FRAMES,
@@ -174,13 +198,57 @@ const RAPTORS: Raptor[] = [
   {
     id: "turkeyVulture",
     name: "Turkey Vulture",
-    shortName: "Vulture",
+    shortName: "Turkey Vulture",
     sheet: turkeyVultureSheet,
     tint: "#7b5547",
     frames: HAWK_FRAMES,
     sizeScale: 1.32,
   },
+  {
+    id: "baldEagle",
+    name: "Bald Eagle",
+    shortName: "Bald Eagle",
+    sheet: baldEagleSheet,
+    tint: "#4a3728",
+    frames: HAWK_FRAMES,
+    sizeScale: 1.6,
+  },
+  {
+    id: "whiteTailedKite",
+    name: "White-tailed Kite",
+    shortName: "White-tailed Kite",
+    sheet: whiteTailedKiteSheet,
+    tint: "#c4b8a8",
+    frames: HAWK_FRAMES,
+    sizeScale: 0.58,
+  },
+  {
+    id: "osprey",
+    name: "Osprey",
+    shortName: "Osprey",
+    sheet: ospreySheet,
+    tint: "#5c4a3a",
+    frames: HAWK_FRAMES,
+    sizeScale: 1.15,
+  },
 ];
+
+const UNIQUE_RAPTORS = RAPTORS.filter(
+  (raptor, index, arr) => arr.findIndex((r) => r.id === raptor.id) === index
+);
+
+const SPECIES_BEHAVIOR: Record<RaptorId, { soarBias: [number, number]; flapFrequency: number; hoverChance: number }> = {
+  americanKestrel: { soarBias: [0.05, 0.2], flapFrequency: 1.3, hoverChance: 0.25 },
+  coopersHawk: { soarBias: [0.15, 0.35], flapFrequency: 1.1, hoverChance: 0 },
+  goldenEagle: { soarBias: [0.6, 0.85], flapFrequency: 0.5, hoverChance: 0 },
+  northernHarrier: { soarBias: [0.3, 0.55], flapFrequency: 0.85, hoverChance: 0 },
+  redShoulderedHawk: { soarBias: [0.2, 0.45], flapFrequency: 0.95, hoverChance: 0 },
+  redTailedHawk: { soarBias: [0.4, 0.65], flapFrequency: 0.7, hoverChance: 0 },
+  turkeyVulture: { soarBias: [0.7, 0.9], flapFrequency: 0.45, hoverChance: 0 },
+  baldEagle: { soarBias: [0.55, 0.8], flapFrequency: 0.55, hoverChance: 0 },
+  whiteTailedKite: { soarBias: [0.1, 0.3], flapFrequency: 1.2, hoverChance: 0.35 },
+  osprey: { soarBias: [0.35, 0.6], flapFrequency: 0.8, hoverChance: 0 },
+};
 
 const DIFFICULTY = {
   beginner: {
@@ -231,17 +299,50 @@ function quadraticBezier(start: number, control: number, end: number, progress: 
   return inverse * inverse * start + 2 * inverse * progress * control + progress * progress * end;
 }
 
-function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
-  const flapCenters = [
-    0.12 + bird.flapOffset,
-    0.32 - bird.flapOffset,
-    0.54 + bird.flapOffset,
-    0.74 - bird.flapOffset,
-    0.92 + bird.flapOffset,
-  ];
-  const flapWidth = 0.10;
+function fade(t: number): number {
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
 
-  for (const center of flapCenters) {
+function hash(x: number): number {
+  const s = Math.sin(x * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function smoothNoise(seed: number, t: number): number {
+  const i = Math.floor(t);
+  const f = t - i;
+  const u = fade(f);
+  return lerp(hash(seed + i), hash(seed + i + 1), u) * 2 - 1;
+}
+
+function getWind(timestamp: number): { x: number; y: number } {
+  const t = timestamp * 0.00008;
+  return {
+    x: Math.sin(t) * 0.4 + Math.sin(t * 2.3) * 0.2,
+    y: Math.cos(t * 0.7) * 0.12,
+  };
+}
+
+function generateFlapCenters(bird: Bird, speciesBehavior: typeof SPECIES_BEHAVIOR[RaptorId]): number[] {
+  const baseCount = Math.round(5 * speciesBehavior.flapFrequency * (1 - bird.soarBias * 0.6));
+  const count = Math.max(2, baseCount);
+  const centers: number[] = [];
+  const spacing = 0.85 / count;
+  const startOffset = 0.08 + Math.random() * 0.05;
+  
+  for (let i = 0; i < count; i++) {
+    const base = startOffset + i * spacing;
+    const jitter = (Math.random() - 0.5) * spacing * 0.4;
+    centers.push(Math.min(0.95, Math.max(0.05, base + jitter)));
+  }
+  
+  return centers;
+}
+
+function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
+  const flapWidth = 0.09 + bird.soarBias * 0.04;
+
+  for (const center of bird.flapCenters) {
     const distance = Math.abs(progress - center);
     if (distance < flapWidth / 2) {
       const localProgress = (progress - (center - flapWidth / 2)) / flapWidth;
@@ -288,17 +389,17 @@ export function App() {
   const lastFrameRef = useRef(0);
 
   const totalActual = useMemo(
-    () => RAPTORS.reduce((sum, raptor) => sum + actualCounts[raptor.id], 0),
+    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + actualCounts[raptor.id], 0),
     [actualCounts],
   );
 
   const totalPlayer = useMemo(
-    () => RAPTORS.reduce((sum, raptor) => sum + playerCounts[raptor.id], 0),
+    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + playerCounts[raptor.id], 0),
     [playerCounts],
   );
 
   const totalDelta = useMemo(
-    () => RAPTORS.reduce((sum, raptor) => sum + Math.abs(playerCounts[raptor.id] - actualCounts[raptor.id]), 0),
+    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + Math.abs(playerCounts[raptor.id] - actualCounts[raptor.id]), 0),
     [actualCounts, playerCounts],
   );
 
@@ -306,7 +407,7 @@ export function App() {
 
   const scorePerSpecies = useMemo(() => {
     const multiplier = difficulty === "expert" ? 2 : 1;
-    return RAPTORS.reduce((acc, raptor) => {
+    return UNIQUE_RAPTORS.reduce((acc, raptor) => {
       const delta = Math.abs(playerCounts[raptor.id] - actualCounts[raptor.id]);
       const base = delta === 0 ? 10 : delta === 1 ? 5 : delta === 2 ? 2 : 0;
       acc[raptor.id] = base * multiplier;
@@ -315,13 +416,13 @@ export function App() {
   }, [actualCounts, playerCounts, difficulty]);
 
   const totalScore = useMemo(
-    () => RAPTORS.reduce((sum, raptor) => sum + scorePerSpecies[raptor.id], 0),
+    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + scorePerSpecies[raptor.id], 0),
     [scorePerSpecies],
   );
 
   const maxScore = useMemo(() => {
     const multiplier = difficulty === "expert" ? 2 : 1;
-    const speciesWithBirds = RAPTORS.filter((r) => actualCounts[r.id] > 0).length;
+    const speciesWithBirds = UNIQUE_RAPTORS.filter((r) => actualCounts[r.id] > 0).length;
     return speciesWithBirds * 10 * multiplier;
   }, [actualCounts, difficulty]);
 
@@ -366,20 +467,23 @@ export function App() {
   const spawnBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
     const config = DIFFICULTY[difficulty];
     const raptor = RAPTORS[Math.floor(Math.random() * RAPTORS.length)];
+    const behavior = SPECIES_BEHAVIOR[raptor.id];
     const direction: 1 | -1 = Math.random() > 0.5 ? 1 : -1;
     const edgePadding = viewWidth * 0.12;
     const startX = direction === 1 ? -edgePadding : viewWidth + edgePadding;
     const endX = direction === 1 ? viewWidth + edgePadding : -edgePadding;
     const startY = randomBetween([viewHeight * 0.16, viewHeight * 0.42]);
     const endY = startY + randomBetween([-viewHeight * 0.05, viewHeight * 0.08]);
-    const controlY = (startY + endY) / 2 + randomBetween([-viewHeight * 0.035, viewHeight * 0.035]);
+    const controlY = (startY + endY) / 2 + randomBetween([-viewHeight * 0.06, viewHeight * 0.06]);
+    const controlX = viewWidth / 2 + randomBetween([-viewWidth * 0.08, viewWidth * 0.08]);
+    
     const bird: Bird = {
       id: birdIdRef.current,
       raptorId: raptor.id,
       direction,
       startX,
       startY,
-      controlX: viewWidth / 2,
+      controlX,
       controlY,
       endX,
       endY,
@@ -391,7 +495,14 @@ export function App() {
       bob: randomBetween([1, 3]),
       phase: Math.random() * Math.PI * 2,
       flapOffset: Math.random() * 0.06,
+      noiseSeed: Math.random() * 10000,
+      soarBias: randomBetween(behavior.soarBias),
+      flapCenters: [],
+      altitudePhase: Math.random() * Math.PI * 2,
+      altitudeAmp: randomBetween([viewHeight * 0.02, viewHeight * 0.05]),
     };
+    
+    bird.flapCenters = generateFlapCenters(bird, behavior);
 
     birdIdRef.current += 1;
     birdsRef.current.push(bird);
@@ -435,20 +546,54 @@ export function App() {
       nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery);
     }
 
+    const wind = getWind(timestamp);
+
     const visibleBirds = birdsRef.current
       .map((bird) => {
         const rawProgress = (timestamp - bird.startedAt) / bird.duration;
         const progress = Math.min(1, Math.max(0, rawProgress));
         const eased = easeInOut(progress);
         const overhead = Math.sin(Math.PI * progress);
-        const x = quadraticBezier(bird.startX, bird.controlX, bird.endX, eased);
-        const y = quadraticBezier(bird.startY, bird.controlY, bird.endY, eased)
+        
+        const baseX = quadraticBezier(bird.startX, bird.controlX, bird.endX, eased);
+        const baseY = quadraticBezier(bird.startY, bird.controlY, bird.endY, eased);
+        
+        const noiseX = smoothNoise(bird.noiseSeed, progress * 3) * viewWidth * 0.04;
+        const noiseY = smoothNoise(bird.noiseSeed + 100, progress * 3) * viewHeight * 0.03;
+        
+        const altitudeVar = Math.sin(progress * Math.PI * 4 + bird.altitudePhase) * bird.altitudeAmp;
+        
+        const windEffect = 1 - overhead * 0.5;
+        const windX = wind.x * viewWidth * 0.08 * windEffect;
+        const windY = wind.y * viewHeight * 0.05 * windEffect;
+        
+        const x = baseX + noiseX + windX;
+        const y = baseY + noiseY + windY + altitudeVar
           + Math.sin(timestamp * 0.0014 + bird.phase) * bird.bob;
+        
+        const prevProgress = Math.max(0, progress - 0.02);
+        const prevEased = easeInOut(prevProgress);
+        const prevX = quadraticBezier(bird.startX, bird.controlX, bird.endX, prevEased);
+        const prevY = quadraticBezier(bird.startY, bird.controlY, bird.endY, prevEased);
+        
+        const nextProgress = Math.min(1, progress + 0.02);
+        const nextEased = easeInOut(nextProgress);
+        const nextX = quadraticBezier(bird.startX, bird.controlX, bird.endX, nextEased);
+        const nextY = quadraticBezier(bird.startY, bird.controlY, bird.endY, nextEased);
+        
+        const dx = nextX - prevX;
+        const dy = nextY - prevY;
+        const velocity = Math.sqrt(dx * dx + dy * dy);
+        const curvature = Math.abs(dx * (nextY - y) - dy * (nextX - x)) / (velocity * velocity + 1);
+        
+        const bankFromCurvature = curvature * bird.direction * 12;
+        const pitchFromVelocity = Math.atan2(dy, dx) * 0.3;
+        const rotation = bird.bank + bankFromCurvature + Math.sin(progress * Math.PI * 2 + bird.phase) * 0.018 + pitchFromVelocity;
+        
         const species = RAPTORS.find((r) => r.id === bird.raptorId);
         const speciesScale = species?.sizeScale ?? 1;
         const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12)) * speciesScale;
         const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
-        const rotation = bird.bank + Math.sin(progress * Math.PI * 2 + bird.phase) * 0.012;
 
         return {
           bird,
@@ -461,6 +606,33 @@ export function App() {
         };
       })
       .sort((a, b) => a.scale - b.scale);
+
+    const separationDist = 60;
+    for (let i = 0; i < visibleBirds.length; i++) {
+      const bird = visibleBirds[i];
+      let sepX = 0;
+      let sepY = 0;
+      let sepCount = 0;
+      
+      for (let j = 0; j < visibleBirds.length; j++) {
+        if (i === j) continue;
+        const other = visibleBirds[j];
+        const dx = bird.x - other.x;
+        const dy = bird.y - other.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < separationDist && dist > 0) {
+          sepX += (dx / dist) * (separationDist - dist);
+          sepY += (dy / dist) * (separationDist - dist);
+          sepCount++;
+        }
+      }
+      
+      if (sepCount > 0) {
+        bird.x += (sepX / sepCount) * 0.5;
+        bird.y += (sepY / sepCount) * 0.5;
+      }
+    }
 
     for (const visibleBird of visibleBirds) {
       const { bird, progress, x, y, scale, alpha, rotation } = visibleBird;
@@ -650,6 +822,9 @@ export function App() {
           red_shouldered_hawk_count: playerCounts.redShoulderedHawk,
           red_tailed_hawk_count: playerCounts.redTailedHawk,
           turkey_vulture_count: playerCounts.turkeyVulture,
+          bald_eagle_count: playerCounts.baldEagle,
+          white_tailed_kite_count: playerCounts.whiteTailedKite,
+          osprey_count: playerCounts.osprey,
         },
       ]);
     setIsSubmitting(false);
@@ -745,7 +920,7 @@ export function App() {
             </div>
           </header>
           <div className="tap-panel" aria-label="Raptor counters">
-            {RAPTORS.map((raptor) => (
+            {UNIQUE_RAPTORS.map((raptor) => (
               <button
                 className="raptor-button"
                 key={raptor.id}
@@ -778,7 +953,7 @@ export function App() {
                 <span>Difference {totalDelta}</span>
               </div>
               <div className="results-grid">
-                {RAPTORS.map((raptor) => {
+                {UNIQUE_RAPTORS.map((raptor) => {
                   const delta = playerCounts[raptor.id] - actualCounts[raptor.id];
                   const points = scorePerSpecies[raptor.id];
                   return (
