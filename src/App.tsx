@@ -687,10 +687,9 @@ export function App() {
       image
         .decode()
         .then(() => {
-          const cleaned = removeCheckerBackground(image);
-          asset.image = cleaned;
-          asset.width = cleaned.width;
-          asset.height = cleaned.height;
+          asset.image = image;
+          asset.width = image.naturalWidth;
+          asset.height = image.naturalHeight;
           asset.ready = true;
         })
         .catch(() => {
@@ -1474,36 +1473,6 @@ export function App() {
       )}
     </main>
   );
-}
-
-function removeCheckerBackground(image: HTMLImageElement) {
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return canvas;
-
-  ctx.drawImage(image, 0, 0);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { data } = imageData;
-
-  for (let index = 0; index < data.length; index += 4) {
-    const red = data[index];
-    const green = data[index + 1];
-    const blue = data[index + 2];
-    const max = Math.max(red, green, blue);
-    const min = Math.min(red, green, blue);
-    const isNeutral = max - min < 9;
-    const isCheckerPixel = isNeutral && red > 205 && green > 205 && blue > 205;
-
-    if (isCheckerPixel) {
-      data[index + 3] = 0;
-    }
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-  return canvas;
 }
 
 function drawBackdrop(
