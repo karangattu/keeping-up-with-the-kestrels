@@ -9,6 +9,7 @@ import {
   Smartphone,
   Target,
   Trophy,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
@@ -1080,6 +1081,17 @@ export function App() {
     setPhase("playing");
   };
 
+  const quitRound = () => {
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    startTimeRef.current = 0;
+    lastFrameRef.current = 0;
+    nextSpawnRef.current = 0;
+    setPhase("intro");
+  };
+
   useEffect(() => {
     if (phase !== "countdown") return undefined;
 
@@ -1327,6 +1339,15 @@ export function App() {
                 </span>
               </div>
             )}
+            <button
+              className="hud-item hud-quit-button"
+              type="button"
+              onClick={quitRound}
+              aria-label="Quit round and return to home"
+            >
+              <X aria-hidden="true" />
+              <span>Quit</span>
+            </button>
           </header>
           <div className="tap-panel" aria-label="Raptor counters">
             {UNIQUE_RAPTORS.map((raptor) => (

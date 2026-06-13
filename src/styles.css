@@ -282,6 +282,20 @@ button {
   font-weight: 900;
 }
 
+.hud-quit-button {
+  pointer-events: auto;
+  cursor: pointer;
+  color: #f7fbf7;
+  font-family: inherit;
+  font-size: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.hud-quit-button:hover {
+  background: rgba(255, 90, 90, 0.22);
+  border-color: rgba(255, 140, 140, 0.55);
+}
+
 .tap-panel {
   position: absolute;
   right: max(16px, env(safe-area-inset-right));
