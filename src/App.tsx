@@ -32,6 +32,11 @@ import northernHarrierMaleSheet from "../assets/northern-harrier-male-sprite-she
 import baldEagleSheet from "../assets/bald-eagle-sprite-sheet.png";
 import whiteTailedKiteSheet from "../assets/white-tailed-kite-sprite-sheet.png";
 import ospreySheet from "../assets/osprey-sprite-sheet.png";
+import baldEagleVentralImage from "../assets/bald-eagle-ventral-view.png";
+import goldenEagleVentralImage from "../assets/golden-eagle-ventral-view.png";
+import redShoulderedHawkVentralImage from "../assets/red-shouldered-hawk-ventral-view.png";
+import redTailedHawkVentralImage from "../assets/red-tailed-hawk-ventral-view.png";
+import turkeyVultureVentralImage from "../assets/turkey-vulture-ventral-view.png";
 
 type Difficulty = "beginner" | "expert";
 type Phase = "intro" | "promo" | "tutorial" | "countdown" | "playing" | "results";
@@ -55,6 +60,13 @@ type RaptorId =
   | "baldEagle"
   | "whiteTailedKite"
   | "osprey";
+
+type ThermalRaptorId =
+  | "goldenEagle"
+  | "redShoulderedHawk"
+  | "redTailedHawk"
+  | "turkeyVulture"
+  | "baldEagle";
 
 type Frame = { sx: number; sy: number; sw: number; sh: number };
 
@@ -104,6 +116,29 @@ type Bird = {
   altitudeAmp: number;
 };
 
+type ThermalBird = {
+  id: number;
+  raptorId: ThermalRaptorId;
+  startedAt: number;
+  duration: number;
+  loopCount: 1 | 2;
+  orbitCenterX: number;
+  orbitCenterY: number;
+  orbitRadiusX: number;
+  orbitRadiusY: number;
+  orbitPhase: number;
+  driftX: number;
+  driftY: number;
+  baseScale: number;
+  sizeRatio: number;
+  turnDirection: 1 | -1;
+  bankPhase: number;
+  alpha: number;
+  altitudePhase: number;
+  altitudeAmp: number;
+  wobble: number;
+};
+
 type SpriteAsset = {
   image: CanvasImageSource;
   width: number;
@@ -117,6 +152,7 @@ const MALE_HARRIER_MIN_ROUND_PROGRESS = 0.35;
 const MALE_HARRIER_CHANCE = 0.18;
 const LEADERBOARD_FETCH_LIMIT = 100;
 const LEADERBOARD_SIZE = 5;
+const THERMAL_TOP_BAND = { min: 0.04, max: 0.26 };
 
 function normalizePlayerName(name: string) {
   return name.trim().toLocaleLowerCase();
@@ -441,6 +477,13 @@ const TUTORIAL_RAPTORS = UNIQUE_RAPTORS.filter(
 
 const SPAWN_RAPTORS = RAPTORS.filter((raptor) => raptor.key !== "northernHarrierMale");
 const MALE_NORTHERN_HARRIER = RAPTORS.find((raptor) => raptor.key === "northernHarrierMale");
+const THERMAL_RAPTORS = [
+  { id: "redShoulderedHawk", image: redShoulderedHawkVentralImage, sizeRatio: 0.83 },
+  { id: "redTailedHawk", image: redTailedHawkVentralImage, sizeRatio: 1 },
+  { id: "turkeyVulture", image: turkeyVultureVentralImage, sizeRatio: 1.41 },
+  { id: "goldenEagle", image: goldenEagleVentralImage, sizeRatio: 1.64 },
+  { id: "baldEagle", image: baldEagleVentralImage, sizeRatio: 1.65 },
+] as const satisfies ReadonlyArray<{ id: ThermalRaptorId; image: string; sizeRatio: number }>;
 
 const SPECIES_BEHAVIOR: Record<
   RaptorId,
@@ -467,6 +510,8 @@ const DIFFICULTY = {
     flightDuration: [9000, 12500],
     farScale: [0.1, 0.14],
     nearScale: [0.3, 0.38],
+    thermalMaxBirds: 1,
+    thermalSpawnEvery: [10000, 14000],
   },
   expert: {
     label: "Expert",
@@ -476,6 +521,8 @@ const DIFFICULTY = {
     flightDuration: [8200, 11200],
     farScale: [0.08, 0.13],
     nearScale: [0.25, 0.34],
+    thermalMaxBirds: 2,
+    thermalSpawnEvery: [7000, 11000],
   },
 } satisfies Record<
   Difficulty,
@@ -487,6 +534,8 @@ const DIFFICULTY = {
     flightDuration: [number, number];
     farScale: [number, number];
     nearScale: [number, number];
+    thermalMaxBirds: number;
+    thermalSpawnEvery: [number, number];
   }
 >;
 
@@ -661,10 +710,14 @@ export function App() {
   const backdropRef = useRef<HTMLImageElement | null>(null);
   const imageMapRef = useRef<Record<string, SpriteAsset> | null>(null);
   const birdsRef = useRef<Bird[]>([]);
+  const thermalImageMapRef = useRef<Record<ThermalRaptorId, SpriteAsset> | null>(null);
+  const thermalBirdsRef = useRef<ThermalBird[]>([]);
   const actualCountsRef = useRef<Counts>(makeCounts());
   const startTimeRef = useRef(0);
   const nextSpawnRef = useRef(0);
+  const nextThermalSpawnRef = useRef(0);
   const birdIdRef = useRef(0);
+  const thermalBirdIdRef = useRef(0);
   const hasSpawnedMaleHarrierRef = useRef(false);
   const animationRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
@@ -753,6 +806,37 @@ export function App() {
     });
 
     imageMapRef.current = Object.fromEntries(entries) as Record<string, SpriteAsset>;
+
+    const thermalEntries = THERMAL_RAPTORS.map((raptor) => {
+      const image = new Image();
+      image.src = raptor.image;
+      const asset: SpriteAsset = {
+        image,
+        width: 0,
+        height: 0,
+        ready: false,
+      };
+
+      image
+        .decode()
+        .then(() => {
+          asset.image = image;
+          asset.width = image.naturalWidth;
+          asset.height = image.naturalHeight;
+          asset.ready = true;
+        })
+        .catch(() => {
+          if (image.complete && image.naturalWidth > 0) {
+            asset.width = image.naturalWidth;
+            asset.height = image.naturalHeight;
+            asset.ready = true;
+          }
+        });
+
+      return [raptor.id, asset] as const;
+    });
+
+    thermalImageMapRef.current = Object.fromEntries(thermalEntries) as Record<ThermalRaptorId, SpriteAsset>;
   }, []);
 
   const spawnBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
@@ -831,10 +915,52 @@ export function App() {
     actualCountsRef.current[raptor.id] += 1;
   }, [difficulty]);
 
+  const spawnThermalBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
+    const raptor = THERMAL_RAPTORS[Math.floor(Math.random() * THERMAL_RAPTORS.length)];
+    const loopCount: 1 | 2 = Math.random() < 0.5 ? 1 : 2;
+    const orbitRadiusX = randomBetween([viewWidth * 0.05, viewWidth * 0.085]);
+    const orbitRadiusY = randomBetween([viewHeight * 0.028, viewHeight * 0.048]);
+    const driftX = randomBetween([-viewWidth * 0.04, viewWidth * 0.04]);
+    const driftY = randomBetween([-viewHeight * 0.008, viewHeight * 0.012]);
+    const safeMinX = orbitRadiusX + Math.abs(driftX) + viewWidth * 0.06;
+    const safeMaxX = viewWidth - safeMinX;
+    const orbitCenterX = randomBetween([safeMinX, Math.max(safeMinX, safeMaxX)]);
+    const minCenterY = viewHeight * (THERMAL_TOP_BAND.min + orbitRadiusY / viewHeight + 0.03);
+    const maxCenterY = viewHeight * (THERMAL_TOP_BAND.max - orbitRadiusY / viewHeight - 0.03);
+    const orbitCenterY = randomBetween([minCenterY, Math.max(minCenterY, maxCenterY)]);
+    const bird: ThermalBird = {
+      id: thermalBirdIdRef.current,
+      raptorId: raptor.id,
+      startedAt: timestamp,
+      duration: randomBetween(loopCount === 1 ? [12000, 16000] : [18000, 23000]),
+      loopCount,
+      orbitCenterX,
+      orbitCenterY,
+      orbitRadiusX,
+      orbitRadiusY,
+      orbitPhase: Math.random() * Math.PI * 2,
+      driftX,
+      driftY,
+      baseScale: randomBetween([0.045, 0.075]),
+      sizeRatio: raptor.sizeRatio,
+      turnDirection: Math.random() > 0.5 ? 1 : -1,
+      bankPhase: Math.random() * Math.PI * 2,
+      alpha: randomBetween([0.6, 0.78]),
+      altitudePhase: Math.random() * Math.PI * 2,
+      altitudeAmp: randomBetween([viewHeight * 0.004, viewHeight * 0.01]),
+      wobble: randomBetween([0.003, 0.008]),
+    };
+
+    thermalBirdIdRef.current += 1;
+    thermalBirdsRef.current.push(bird);
+    actualCountsRef.current[raptor.id] += 1;
+  }, []);
+
   const drawScene = useCallback((timestamp: number) => {
     const canvas = canvasRef.current;
     const images = imageMapRef.current;
-    if (!canvas || !images) return;
+    const thermalImages = thermalImageMapRef.current;
+    if (!canvas || !images || !thermalImages) return;
     const currentPhase = phaseRef.current;
 
     const rect = canvas.getBoundingClientRect();
@@ -857,6 +983,7 @@ export function App() {
     drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
 
     birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
+    thermalBirdsRef.current = thermalBirdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.02);
 
     if (currentPhase === "playing") {
       const config = DIFFICULTY[difficulty];
@@ -869,9 +996,62 @@ export function App() {
         spawnBird(viewWidth, viewHeight, timestamp);
         nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery);
       }
+
+      if (timestamp >= nextThermalSpawnRef.current && thermalBirdsRef.current.length < config.thermalMaxBirds) {
+        spawnThermalBird(viewWidth, viewHeight, timestamp);
+        nextThermalSpawnRef.current = timestamp + randomBetween(config.thermalSpawnEvery);
+      }
     }
 
     const wind = getWind(timestamp);
+    const visibleThermalBirds = thermalBirdsRef.current
+      .map((bird) => {
+        const sprite = thermalImages[bird.raptorId];
+        if (!sprite?.ready || sprite.width === 0) return null;
+
+        const progress = Math.min(1, Math.max(0, (timestamp - bird.startedAt) / bird.duration));
+        const centerX = bird.orbitCenterX + bird.driftX * progress;
+        const centerY = bird.orbitCenterY + bird.driftY * progress;
+        const angle = bird.orbitPhase + bird.turnDirection * progress * bird.loopCount * Math.PI * 2;
+        const fadeEnvelope = Math.sin(Math.PI * progress);
+        const x = centerX + Math.cos(angle) * bird.orbitRadiusX;
+        const unclampedY = centerY
+          + Math.sin(angle) * bird.orbitRadiusY
+          + Math.sin(progress * Math.PI * 3 + bird.altitudePhase) * bird.altitudeAmp;
+        const y = clamp(unclampedY, viewHeight * THERMAL_TOP_BAND.min, viewHeight * THERMAL_TOP_BAND.max);
+        const scale = bird.baseScale * bird.sizeRatio * (0.96 + fadeEnvelope * 0.08);
+        const rotation = bird.turnDirection * 0.08 * Math.sin(angle + bird.bankPhase)
+          + Math.sin(progress * Math.PI * 4 + bird.bankPhase) * bird.wobble;
+        const alpha = bird.alpha * (0.45 + fadeEnvelope * 0.55);
+
+        return {
+          bird,
+          x,
+          y,
+          scale,
+          rotation,
+          alpha,
+          sprite,
+        };
+      })
+      .filter((bird): bird is NonNullable<typeof bird> => Boolean(bird))
+      .sort((a, b) => a.scale - b.scale);
+
+    for (const thermalBird of visibleThermalBirds) {
+      const { x, y, scale, rotation, alpha, sprite } = thermalBird;
+      const drawWidth = sprite.width * scale;
+      const drawHeight = sprite.height * scale;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = "rgba(17, 34, 42, 0.1)";
+      ctx.shadowBlur = 4 + scale * 8;
+      ctx.shadowOffsetY = 2 + scale * 6;
+      ctx.drawImage(sprite.image, 0, 0, sprite.width, sprite.height, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      ctx.restore();
+    }
 
     const visibleBirds = birdsRef.current
       .map((bird) => {
@@ -998,6 +1178,7 @@ export function App() {
       if (!startTimeRef.current) {
         startTimeRef.current = timestamp;
         nextSpawnRef.current = timestamp + 450;
+        nextThermalSpawnRef.current = timestamp + 1400;
         lastFrameRef.current = timestamp;
       }
 
@@ -1117,10 +1298,13 @@ export function App() {
     setCountdown(3);
     actualCountsRef.current = makeCounts();
     birdsRef.current = [];
+    thermalBirdsRef.current = [];
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
     nextSpawnRef.current = 0;
+    nextThermalSpawnRef.current = 0;
     birdIdRef.current = 0;
+    thermalBirdIdRef.current = 0;
     hasSpawnedMaleHarrierRef.current = false;
     startGameMusic();
     setPhase("promo");
@@ -1131,6 +1315,8 @@ export function App() {
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
     nextSpawnRef.current = 0;
+    nextThermalSpawnRef.current = 0;
+    thermalBirdsRef.current = [];
     setPhase("playing");
   };
 
@@ -1139,9 +1325,12 @@ export function App() {
       window.cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
+    birdsRef.current = [];
+    thermalBirdsRef.current = [];
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
     nextSpawnRef.current = 0;
+    nextThermalSpawnRef.current = 0;
     setPhase("intro");
   };
 
@@ -1151,6 +1340,7 @@ export function App() {
       animationRef.current = null;
     }
     birdsRef.current = [];
+    thermalBirdsRef.current = [];
     setPhase("countdown");
   };
 
@@ -1163,6 +1353,7 @@ export function App() {
     if (phase !== "tutorial") return undefined;
 
     birdsRef.current = [];
+    thermalBirdsRef.current = [];
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
 
@@ -1220,6 +1411,7 @@ export function App() {
         }
       } else {
         birdsRef.current = [];
+        thermalBirdsRef.current = [];
         startTimeRef.current = 0;
       }
 
@@ -1236,6 +1428,7 @@ export function App() {
         animationRef.current = null;
       }
       birdsRef.current = [];
+      thermalBirdsRef.current = [];
     };
   }, [drawScene, phase, tutorialStep]);
 
