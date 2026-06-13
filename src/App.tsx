@@ -14,6 +14,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import introVideo from "../assets/game_intro.mp4";
 import promoVideo from "../assets/promo.mp4";
+import gameSong from "../assets/game_song.mp3";
+import rshaSound from "../assets/RSHA_sound.wav";
+import rthaSound from "../assets/RTHA_sound.wav";
 import posterImage from "../assets/game_poster.jpg";
 import logoImage from "../assets/SFBBO_Logo_Rounded.png";
 import backdropImage from "../assets/backdrop.png";
@@ -55,6 +58,7 @@ type RaptorId =
 type Frame = { sx: number; sy: number; sw: number; sh: number };
 
 type Raptor = {
+  key: string;
   id: RaptorId;
   name: string;
   shortName: string;
@@ -70,6 +74,7 @@ type Streaks = Record<RaptorId, number>;
 
 type Bird = {
   id: number;
+  raptorKey: string;
   raptorId: RaptorId;
   flightStyle: "glide" | "hover" | "teeter" | "flapGlide";
   direction: 1 | -1;
@@ -107,6 +112,8 @@ type SpriteAsset = {
 
 const ROUND_SECONDS = 60;
 const PROMO_FALLBACK_MS = 9000;
+const MALE_HARRIER_MIN_ROUND_PROGRESS = 0.35;
+const MALE_HARRIER_CHANCE = 0.18;
 
 function framesFromBounds(bounds: Array<[number, number, number, number]>, width: number, height: number, padding = 16): Frame[] {
   return bounds.map(([minX, minY, maxX, maxY]) => {
@@ -282,6 +289,7 @@ const EMPTY_COUNTS: Counts = {
 
 const RAPTORS: Raptor[] = [
   {
+    key: "americanKestrel",
     id: "americanKestrel",
     name: "American Kestrel",
     shortName: "American Kestrel",
@@ -291,6 +299,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 0.47,
   },
   {
+    key: "coopersHawk",
     id: "coopersHawk",
     name: "Cooper's Hawk",
     shortName: "Cooper's Hawk",
@@ -300,6 +309,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 0.62,
   },
   {
+    key: "goldenEagle",
     id: "goldenEagle",
     name: "Golden Eagle",
     shortName: "Golden Eagle",
@@ -309,6 +319,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 1.42,
   },
   {
+    key: "northernHarrier",
     id: "northernHarrier",
     name: "Northern Harrier",
     shortName: "Northern Harrier",
@@ -318,6 +329,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 0.89,
   },
   {
+    key: "northernHarrierMale",
     id: "northernHarrier",
     name: "Northern Harrier (Male)",
     shortName: "Northern Harrier",
@@ -327,6 +339,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 0.86,
   },
   {
+    key: "redShoulderedHawk",
     id: "redShoulderedHawk",
     name: "Red-shouldered Hawk",
     shortName: "Red-shouldered Hawk",
@@ -336,6 +349,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 0.78,
   },
   {
+    key: "redTailedHawk",
     id: "redTailedHawk",
     name: "Red-tailed Hawk",
     shortName: "Red-tailed Hawk",
@@ -345,6 +359,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 1,
   },
   {
+    key: "turkeyVulture",
     id: "turkeyVulture",
     name: "Turkey Vulture",
     shortName: "Turkey Vulture",
@@ -354,6 +369,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 1.42,
   },
   {
+    key: "baldEagle",
     id: "baldEagle",
     name: "Bald Eagle",
     shortName: "Bald Eagle",
@@ -363,6 +379,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 1.66,
   },
   {
+    key: "whiteTailedKite",
     id: "whiteTailedKite",
     name: "White-tailed Kite",
     shortName: "White-tailed Kite",
@@ -372,6 +389,7 @@ const RAPTORS: Raptor[] = [
     sizeScale: 0.85,
   },
   {
+    key: "osprey",
     id: "osprey",
     name: "Osprey",
     shortName: "Osprey",
@@ -385,6 +403,9 @@ const RAPTORS: Raptor[] = [
 const UNIQUE_RAPTORS = RAPTORS.filter(
   (raptor, index, arr) => arr.findIndex((r) => r.id === raptor.id) === index
 );
+
+const SPAWN_RAPTORS = RAPTORS.filter((raptor) => raptor.key !== "northernHarrierMale");
+const MALE_NORTHERN_HARRIER = RAPTORS.find((raptor) => raptor.key === "northernHarrierMale");
 
 const SPECIES_BEHAVIOR: Record<
   RaptorId,
@@ -593,13 +614,17 @@ export function App() {
   const [submitError, setSubmitError] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const gameMusicRef = useRef<HTMLAudioElement | null>(null);
+  const rthaAudioRef = useRef<HTMLAudioElement | null>(null);
+  const rshaAudioRef = useRef<HTMLAudioElement | null>(null);
   const backdropRef = useRef<HTMLImageElement | null>(null);
-  const imageMapRef = useRef<Record<RaptorId, SpriteAsset> | null>(null);
+  const imageMapRef = useRef<Record<string, SpriteAsset> | null>(null);
   const birdsRef = useRef<Bird[]>([]);
   const actualCountsRef = useRef<Counts>(makeCounts());
   const startTimeRef = useRef(0);
   const nextSpawnRef = useRef(0);
   const birdIdRef = useRef(0);
+  const hasSpawnedMaleHarrierRef = useRef(false);
   const animationRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
 
@@ -673,10 +698,10 @@ export function App() {
           }
         });
 
-      return [raptor.id, asset] as const;
+      return [raptor.key, asset] as const;
     });
 
-    imageMapRef.current = Object.fromEntries(entries) as Record<RaptorId, SpriteAsset>;
+    imageMapRef.current = Object.fromEntries(entries) as Record<string, SpriteAsset>;
   }, []);
 
   const spawnBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
@@ -684,9 +709,23 @@ export function App() {
     const elapsed = startTimeRef.current > 0 ? (timestamp - startTimeRef.current) / 1000 : 0;
     const progress = Math.min(1, elapsed / ROUND_SECONDS);
     
-    const speciesPool = Math.floor(progress * RAPTORS.length * 1.5) + 3;
-    const availableRaptors = RAPTORS.slice(0, Math.min(speciesPool, RAPTORS.length));
-    const raptor = availableRaptors[Math.floor(Math.random() * availableRaptors.length)];
+    const speciesPool = Math.floor(progress * SPAWN_RAPTORS.length * 1.5) + 3;
+    const availableRaptors = SPAWN_RAPTORS.slice(0, Math.min(speciesPool, SPAWN_RAPTORS.length));
+    const forceMaleHarrier = !hasSpawnedMaleHarrierRef.current
+      && progress >= 0.75
+      && availableRaptors.some((candidate) => candidate.id === "northernHarrier");
+    const selectedRaptor = availableRaptors[Math.floor(Math.random() * availableRaptors.length)];
+    const shouldUseMaleHarrier = !hasSpawnedMaleHarrierRef.current
+      && selectedRaptor.id === "northernHarrier"
+      && progress >= MALE_HARRIER_MIN_ROUND_PROGRESS
+      && Math.random() < MALE_HARRIER_CHANCE;
+    const raptor = (forceMaleHarrier || shouldUseMaleHarrier) && MALE_NORTHERN_HARRIER
+      ? MALE_NORTHERN_HARRIER
+      : selectedRaptor;
+
+    if (raptor.key === "northernHarrierMale") {
+      hasSpawnedMaleHarrierRef.current = true;
+    }
     
     const behavior = SPECIES_BEHAVIOR[raptor.id];
     const flightStyle = Math.random() < behavior.hoverChance ? "hover" : behavior.flightStyle;
@@ -705,6 +744,7 @@ export function App() {
     
     const bird: Bird = {
       id: birdIdRef.current,
+      raptorKey: raptor.key,
       raptorId: raptor.id,
       flightStyle,
       direction,
@@ -826,8 +866,8 @@ export function App() {
           0.32,
         );
         
-        const species = RAPTORS.find((r) => r.id === bird.raptorId);
-        const speciesScale = species?.sizeScale ?? 1;
+        const raptorConfig = RAPTORS.find((r) => r.key === bird.raptorKey);
+        const speciesScale = raptorConfig?.sizeScale ?? 1;
         const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12)) * speciesScale;
         const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
 
@@ -872,10 +912,10 @@ export function App() {
 
     for (const visibleBird of visibleBirds) {
       const { bird, progress, x, y, scale, alpha, rotation } = visibleBird;
-      const sprite = images[bird.raptorId];
+      const sprite = images[bird.raptorKey];
       if (!sprite.ready || sprite.width === 0) continue;
 
-      const raptorConfig = RAPTORS.find((r) => r.id === bird.raptorId);
+      const raptorConfig = RAPTORS.find((r) => r.key === bird.raptorKey);
       if (!raptorConfig) continue;
 
       const frames = raptorConfig.frames;
@@ -953,6 +993,66 @@ export function App() {
     return () => document.removeEventListener("visibilitychange", pauseWhenHidden);
   }, []);
 
+  useEffect(() => {
+    const audio = gameMusicRef.current;
+    if (!audio) return;
+
+    if (phase === "promo" || phase === "countdown" || phase === "playing") {
+      void audio.play().catch(() => undefined);
+      return;
+    }
+
+    audio.pause();
+    audio.currentTime = 0;
+  }, [phase]);
+
+  useEffect(() => {
+    return () => {
+      gameMusicRef.current?.pause();
+      rthaAudioRef.current?.pause();
+      rshaAudioRef.current?.pause();
+    };
+  }, []);
+
+  useEffect(() => {
+    const rtha = rthaAudioRef.current;
+    const rsha = rshaAudioRef.current;
+    if (rtha) rtha.volume = 0.15;
+    if (rsha) rsha.volume = 0.15;
+
+    const playIntroSounds = () => {
+      if (phase === "intro") {
+        void rtha?.play().catch(() => undefined);
+        void rsha?.play().catch(() => undefined);
+      }
+    };
+
+    if (phase === "intro") {
+      playIntroSounds();
+      window.addEventListener("pointerdown", playIntroSounds);
+      window.addEventListener("keydown", playIntroSounds);
+    } else {
+      rtha?.pause();
+      if (rtha) rtha.currentTime = 0;
+      rsha?.pause();
+      if (rsha) rsha.currentTime = 0;
+    }
+
+    return () => {
+      window.removeEventListener("pointerdown", playIntroSounds);
+      window.removeEventListener("keydown", playIntroSounds);
+    };
+  }, [phase]);
+
+  const startGameMusic = () => {
+    const audio = gameMusicRef.current;
+    if (!audio) return;
+
+    audio.volume = 0.42;
+    audio.currentTime = 0;
+    void audio.play().catch(() => undefined);
+  };
+
   const prepareRound = (selectedDifficulty = difficulty) => {
     setDifficulty(selectedDifficulty);
     setPlayerCounts(makeCounts());
@@ -967,6 +1067,8 @@ export function App() {
     lastFrameRef.current = 0;
     nextSpawnRef.current = 0;
     birdIdRef.current = 0;
+    hasSpawnedMaleHarrierRef.current = false;
+    startGameMusic();
     setPhase("promo");
   };
 
@@ -1134,6 +1236,9 @@ export function App() {
 
   return (
     <main className="app-shell">
+      <audio ref={gameMusicRef} src={gameSong} loop preload="auto" />
+      <audio ref={rthaAudioRef} src={rthaSound} loop preload="auto" />
+      <audio ref={rshaAudioRef} src={rshaSound} loop preload="auto" />
       <section className="orientation-lock">
         <Smartphone aria-hidden="true" />
         <h1>Rotate to landscape</h1>
@@ -1158,7 +1263,7 @@ export function App() {
                 </button>
               ))}
             </div>
-            <button className="primary-action" type="button" onClick={() => prepareRound()}>
+            <button className="primary-action" type="button" onPointerDown={startGameMusic} onClick={() => prepareRound()}>
               <Play aria-hidden="true" />
               Start 60-second round
             </button>
