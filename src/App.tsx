@@ -66,12 +66,19 @@ type Raptor = {
 
 type Counts = Record<RaptorId, number>;
 
+type Streaks = Record<RaptorId, number>;
+
 type Bird = {
   id: number;
   raptorId: RaptorId;
+  flightStyle: "glide" | "hover" | "teeter" | "flapGlide";
   direction: 1 | -1;
   startX: number;
   startY: number;
+  hoverX: number;
+  hoverY: number;
+  hoverStart: number;
+  hoverEnd: number;
   controlX: number;
   controlY: number;
   endX: number;
@@ -139,7 +146,7 @@ const RAPTORS: Raptor[] = [
     sheet: americanKestrelSheet,
     tint: "#e8a84c",
     frames: HAWK_FRAMES,
-    sizeScale: 0.52,
+    sizeScale: 0.47,
   },
   {
     id: "coopersHawk",
@@ -148,7 +155,7 @@ const RAPTORS: Raptor[] = [
     sheet: coopersHawkSheet,
     tint: "#8ca6a9",
     frames: HAWK_FRAMES,
-    sizeScale: 0.72,
+    sizeScale: 0.62,
   },
   {
     id: "goldenEagle",
@@ -157,7 +164,7 @@ const RAPTORS: Raptor[] = [
     sheet: goldenEagleSheet,
     tint: "#6b5c43",
     frames: HAWK_FRAMES,
-    sizeScale: 1.55,
+    sizeScale: 1.42,
   },
   {
     id: "northernHarrier",
@@ -166,7 +173,7 @@ const RAPTORS: Raptor[] = [
     sheet: northernHarrierSheet,
     tint: "#ab8660",
     frames: HARRIER_FRAMES,
-    sizeScale: 0.94,
+    sizeScale: 0.89,
   },
   {
     id: "northernHarrier",
@@ -175,7 +182,7 @@ const RAPTORS: Raptor[] = [
     sheet: northernHarrierMaleSheet,
     tint: "#8a9ba8",
     frames: HARRIER_FRAMES,
-    sizeScale: 0.9,
+    sizeScale: 0.86,
   },
   {
     id: "redShoulderedHawk",
@@ -184,7 +191,7 @@ const RAPTORS: Raptor[] = [
     sheet: redShoulderedHawkSheet,
     tint: "#c35a32",
     frames: HAWK_FRAMES,
-    sizeScale: 0.86,
+    sizeScale: 0.78,
   },
   {
     id: "redTailedHawk",
@@ -202,7 +209,7 @@ const RAPTORS: Raptor[] = [
     sheet: turkeyVultureSheet,
     tint: "#7b5547",
     frames: HAWK_FRAMES,
-    sizeScale: 1.32,
+    sizeScale: 1.42,
   },
   {
     id: "baldEagle",
@@ -211,7 +218,7 @@ const RAPTORS: Raptor[] = [
     sheet: baldEagleSheet,
     tint: "#4a3728",
     frames: HAWK_FRAMES,
-    sizeScale: 1.6,
+    sizeScale: 1.66,
   },
   {
     id: "whiteTailedKite",
@@ -220,7 +227,7 @@ const RAPTORS: Raptor[] = [
     sheet: whiteTailedKiteSheet,
     tint: "#c4b8a8",
     frames: HAWK_FRAMES,
-    sizeScale: 0.58,
+    sizeScale: 0.85,
   },
   {
     id: "osprey",
@@ -229,7 +236,7 @@ const RAPTORS: Raptor[] = [
     sheet: ospreySheet,
     tint: "#5c4a3a",
     frames: HAWK_FRAMES,
-    sizeScale: 1.15,
+    sizeScale: 1.35,
   },
 ];
 
@@ -237,17 +244,20 @@ const UNIQUE_RAPTORS = RAPTORS.filter(
   (raptor, index, arr) => arr.findIndex((r) => r.id === raptor.id) === index
 );
 
-const SPECIES_BEHAVIOR: Record<RaptorId, { soarBias: [number, number]; flapFrequency: number; hoverChance: number }> = {
-  americanKestrel: { soarBias: [0.05, 0.2], flapFrequency: 1.3, hoverChance: 0.25 },
-  coopersHawk: { soarBias: [0.15, 0.35], flapFrequency: 1.1, hoverChance: 0 },
-  goldenEagle: { soarBias: [0.6, 0.85], flapFrequency: 0.5, hoverChance: 0 },
-  northernHarrier: { soarBias: [0.3, 0.55], flapFrequency: 0.85, hoverChance: 0 },
-  redShoulderedHawk: { soarBias: [0.2, 0.45], flapFrequency: 0.95, hoverChance: 0 },
-  redTailedHawk: { soarBias: [0.4, 0.65], flapFrequency: 0.7, hoverChance: 0 },
-  turkeyVulture: { soarBias: [0.7, 0.9], flapFrequency: 0.45, hoverChance: 0 },
-  baldEagle: { soarBias: [0.55, 0.8], flapFrequency: 0.55, hoverChance: 0 },
-  whiteTailedKite: { soarBias: [0.1, 0.3], flapFrequency: 1.2, hoverChance: 0.35 },
-  osprey: { soarBias: [0.35, 0.6], flapFrequency: 0.8, hoverChance: 0 },
+const SPECIES_BEHAVIOR: Record<
+  RaptorId,
+  { soarBias: [number, number]; flapBursts: [number, number]; hoverChance: number; flightStyle: Bird["flightStyle"] }
+> = {
+  americanKestrel: { soarBias: [0.12, 0.28], flapBursts: [1, 2], hoverChance: 0.08, flightStyle: "flapGlide" },
+  coopersHawk: { soarBias: [0.2, 0.42], flapBursts: [1, 2], hoverChance: 0, flightStyle: "flapGlide" },
+  goldenEagle: { soarBias: [0.72, 0.92], flapBursts: [1, 1], hoverChance: 0, flightStyle: "glide" },
+  northernHarrier: { soarBias: [0.42, 0.62], flapBursts: [1, 2], hoverChance: 0, flightStyle: "glide" },
+  redShoulderedHawk: { soarBias: [0.36, 0.56], flapBursts: [1, 2], hoverChance: 0, flightStyle: "glide" },
+  redTailedHawk: { soarBias: [0.62, 0.82], flapBursts: [1, 1], hoverChance: 0, flightStyle: "glide" },
+  turkeyVulture: { soarBias: [0.82, 0.96], flapBursts: [1, 1], hoverChance: 0, flightStyle: "teeter" },
+  baldEagle: { soarBias: [0.72, 0.9], flapBursts: [1, 1], hoverChance: 0, flightStyle: "glide" },
+  whiteTailedKite: { soarBias: [0.18, 0.36], flapBursts: [1, 2], hoverChance: 0.78, flightStyle: "hover" },
+  osprey: { soarBias: [0.48, 0.68], flapBursts: [1, 2], hoverChance: 0.1, flightStyle: "glide" },
 };
 
 const DIFFICULTY = {
@@ -315,6 +325,10 @@ function smoothNoise(seed: number, t: number): number {
   return lerp(hash(seed + i), hash(seed + i + 1), u) * 2 - 1;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 function getWind(timestamp: number): { x: number; y: number } {
   const t = timestamp * 0.00008;
   return {
@@ -323,41 +337,95 @@ function getWind(timestamp: number): { x: number; y: number } {
   };
 }
 
+function getBirdBasePosition(bird: Bird, progress: number): { x: number; y: number } {
+  if (bird.flightStyle === "hover") {
+    if (progress < bird.hoverStart) {
+      const approach = easeInOut(progress / bird.hoverStart);
+      return {
+        x: lerp(bird.startX, bird.hoverX, approach),
+        y: lerp(bird.startY, bird.hoverY, approach),
+      };
+    }
+
+    if (progress <= bird.hoverEnd) {
+      const hoverProgress = (progress - bird.hoverStart) / (bird.hoverEnd - bird.hoverStart);
+      return {
+        x: bird.hoverX + Math.sin(hoverProgress * Math.PI * 2 + bird.phase) * 7,
+        y: bird.hoverY + Math.sin(hoverProgress * Math.PI * 4 + bird.altitudePhase) * 4,
+      };
+    }
+
+    const exit = easeInOut((progress - bird.hoverEnd) / (1 - bird.hoverEnd));
+    return {
+      x: lerp(bird.hoverX, bird.endX, exit),
+      y: lerp(bird.hoverY, bird.endY, exit),
+    };
+  }
+
+  const eased = easeInOut(progress);
+  return {
+    x: quadraticBezier(bird.startX, bird.controlX, bird.endX, eased),
+    y: quadraticBezier(bird.startY, bird.controlY, bird.endY, eased),
+  };
+}
+
 function generateFlapCenters(bird: Bird, speciesBehavior: typeof SPECIES_BEHAVIOR[RaptorId]): number[] {
-  const baseCount = Math.round(5 * speciesBehavior.flapFrequency * (1 - bird.soarBias * 0.6));
-  const count = Math.max(2, baseCount);
+  const count = Math.round(randomBetween(speciesBehavior.flapBursts));
   const centers: number[] = [];
-  const spacing = 0.85 / count;
-  const startOffset = 0.08 + Math.random() * 0.05;
-  
+
+  if (bird.flightStyle === "hover") {
+    if (count === 1) return [randomBetween([bird.hoverStart + 0.12, bird.hoverEnd - 0.12])];
+    return [bird.hoverStart + 0.14, bird.hoverEnd - 0.14];
+  }
+
+  const spacing = 0.72 / count;
+  const startOffset = 0.16 + Math.random() * 0.06;
+
   for (let i = 0; i < count; i++) {
     const base = startOffset + i * spacing;
     const jitter = (Math.random() - 0.5) * spacing * 0.4;
-    centers.push(Math.min(0.95, Math.max(0.05, base + jitter)));
+    centers.push(clamp(base + jitter, 0.1, 0.9));
   }
-  
+
   return centers;
 }
 
 function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
-  const flapWidth = 0.09 + bird.soarBias * 0.04;
+  const flapWidth = bird.flightStyle === "hover" ? 0.18 : 0.12;
 
   for (const center of bird.flapCenters) {
     const distance = Math.abs(progress - center);
     if (distance < flapWidth / 2) {
       const localProgress = (progress - (center - flapWidth / 2)) / flapWidth;
-      const sequence = [2, 1, 0, 1, 2];
+      const sequence = [0, 1, 2, 1, 0, 3, 4, 5, 4, 3, 0];
       const sequenceIndex = Math.min(sequence.length - 1, Math.floor(localProgress * sequence.length));
       return Math.min(sequence[sequenceIndex], frameCount - 1);
     }
   }
 
-  const glideValue = 1.5 + 0.5 * Math.sin(progress * Math.PI * 5 + bird.phase);
-  return Math.min(Math.round(glideValue), frameCount - 1);
+  if (bird.flightStyle === "hover") {
+    return Math.min(Math.round(1 + Math.sin(progress * Math.PI * 8 + bird.phase) * 0.6), frameCount - 1);
+  }
+
+  const glideValue = bird.flightStyle === "teeter"
+    ? 0.4 + 0.5 * Math.sin(progress * Math.PI * 3 + bird.phase)
+    : 0.25 + 0.35 * Math.sin(progress * Math.PI * 2 + bird.phase);
+  return clamp(Math.round(glideValue), 0, frameCount - 1);
 }
 
 function makeCounts(): Counts {
   return { ...EMPTY_COUNTS };
+}
+
+function makeStreaks(): Streaks {
+  return { ...EMPTY_COUNTS };
+}
+
+function getMultiplier(streak: number): number {
+  if (streak >= 4) return 5;
+  if (streak >= 3) return 3;
+  if (streak >= 2) return 2;
+  return 1;
 }
 
 function formatTime(seconds: number) {
@@ -372,10 +440,15 @@ export function App() {
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
+  const [streaks, setStreaks] = useState<Streaks>(() => makeStreaks());
+  const [lastStreakEvent, setLastStreakEvent] = useState<{ raptorId: RaptorId; multiplier: number; timestamp: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<HighScore[]>([]);
+  const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState("");
   const [qualifiesForHighScore, setQualifiesForHighScore] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const backdropRef = useRef<HTMLImageElement | null>(null);
@@ -466,8 +539,15 @@ export function App() {
 
   const spawnBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
     const config = DIFFICULTY[difficulty];
-    const raptor = RAPTORS[Math.floor(Math.random() * RAPTORS.length)];
+    const elapsed = startTimeRef.current > 0 ? (timestamp - startTimeRef.current) / 1000 : 0;
+    const progress = Math.min(1, elapsed / ROUND_SECONDS);
+    
+    const speciesPool = Math.floor(progress * RAPTORS.length * 1.5) + 3;
+    const availableRaptors = RAPTORS.slice(0, Math.min(speciesPool, RAPTORS.length));
+    const raptor = availableRaptors[Math.floor(Math.random() * availableRaptors.length)];
+    
     const behavior = SPECIES_BEHAVIOR[raptor.id];
+    const flightStyle = Math.random() < behavior.hoverChance ? "hover" : behavior.flightStyle;
     const direction: 1 | -1 = Math.random() > 0.5 ? 1 : -1;
     const edgePadding = viewWidth * 0.12;
     const startX = direction === 1 ? -edgePadding : viewWidth + edgePadding;
@@ -476,13 +556,22 @@ export function App() {
     const endY = startY + randomBetween([-viewHeight * 0.05, viewHeight * 0.08]);
     const controlY = (startY + endY) / 2 + randomBetween([-viewHeight * 0.06, viewHeight * 0.06]);
     const controlX = viewWidth / 2 + randomBetween([-viewWidth * 0.08, viewWidth * 0.08]);
+    const hoverX = randomBetween([viewWidth * 0.38, viewWidth * 0.62]);
+    const hoverY = randomBetween([viewHeight * 0.18, viewHeight * 0.38]);
+    const hoverStart = randomBetween([0.2, 0.28]);
+    const hoverEnd = randomBetween([0.68, 0.78]);
     
     const bird: Bird = {
       id: birdIdRef.current,
       raptorId: raptor.id,
+      flightStyle,
       direction,
       startX,
       startY,
+      hoverX,
+      hoverY,
+      hoverStart,
+      hoverEnd,
       controlX,
       controlY,
       endX,
@@ -552,43 +641,48 @@ export function App() {
       .map((bird) => {
         const rawProgress = (timestamp - bird.startedAt) / bird.duration;
         const progress = Math.min(1, Math.max(0, rawProgress));
-        const eased = easeInOut(progress);
         const overhead = Math.sin(Math.PI * progress);
         
-        const baseX = quadraticBezier(bird.startX, bird.controlX, bird.endX, eased);
-        const baseY = quadraticBezier(bird.startY, bird.controlY, bird.endY, eased);
+        const base = getBirdBasePosition(bird, progress);
         
-        const noiseX = smoothNoise(bird.noiseSeed, progress * 3) * viewWidth * 0.04;
-        const noiseY = smoothNoise(bird.noiseSeed + 100, progress * 3) * viewHeight * 0.03;
+        const noiseScale = bird.flightStyle === "hover" ? 0.25 : 1;
+        const noiseX = smoothNoise(bird.noiseSeed, progress * 3) * viewWidth * 0.04 * noiseScale;
+        const noiseY = smoothNoise(bird.noiseSeed + 100, progress * 3) * viewHeight * 0.03 * noiseScale;
         
-        const altitudeVar = Math.sin(progress * Math.PI * 4 + bird.altitudePhase) * bird.altitudeAmp;
+        const altitudeVar = Math.sin(progress * Math.PI * 4 + bird.altitudePhase) * bird.altitudeAmp * noiseScale;
         
         const windEffect = 1 - overhead * 0.5;
-        const windX = wind.x * viewWidth * 0.08 * windEffect;
-        const windY = wind.y * viewHeight * 0.05 * windEffect;
+        const windX = wind.x * viewWidth * 0.08 * windEffect * noiseScale;
+        const windY = wind.y * viewHeight * 0.05 * windEffect * noiseScale;
         
-        const x = baseX + noiseX + windX;
-        const y = baseY + noiseY + windY + altitudeVar
+        const x = base.x + noiseX + windX;
+        const y = base.y + noiseY + windY + altitudeVar
           + Math.sin(timestamp * 0.0014 + bird.phase) * bird.bob;
         
         const prevProgress = Math.max(0, progress - 0.02);
-        const prevEased = easeInOut(prevProgress);
-        const prevX = quadraticBezier(bird.startX, bird.controlX, bird.endX, prevEased);
-        const prevY = quadraticBezier(bird.startY, bird.controlY, bird.endY, prevEased);
+        const prevBase = getBirdBasePosition(bird, prevProgress);
         
         const nextProgress = Math.min(1, progress + 0.02);
-        const nextEased = easeInOut(nextProgress);
-        const nextX = quadraticBezier(bird.startX, bird.controlX, bird.endX, nextEased);
-        const nextY = quadraticBezier(bird.startY, bird.controlY, bird.endY, nextEased);
+        const nextBase = getBirdBasePosition(bird, nextProgress);
         
-        const dx = nextX - prevX;
-        const dy = nextY - prevY;
+        const dx = nextBase.x - prevBase.x;
+        const dy = nextBase.y - prevBase.y;
         const velocity = Math.sqrt(dx * dx + dy * dy);
-        const curvature = Math.abs(dx * (nextY - y) - dy * (nextX - x)) / (velocity * velocity + 1);
+        const curveX = nextBase.x - base.x;
+        const curveY = nextBase.y - base.y;
+        const curvature = Math.abs(dx * curveY - dy * curveX) / (velocity * velocity + 1);
         
-        const bankFromCurvature = curvature * bird.direction * 12;
-        const pitchFromVelocity = Math.atan2(dy, dx) * 0.3;
-        const rotation = bird.bank + bankFromCurvature + Math.sin(progress * Math.PI * 2 + bird.phase) * 0.018 + pitchFromVelocity;
+        const bankFromCurvature = clamp(curvature * bird.direction * 4, -0.18, 0.18);
+        const pitchFromVelocity = clamp(Math.atan2(dy, Math.max(1, Math.abs(dx))) * 0.35, -0.16, 0.16);
+        const teeter = bird.flightStyle === "teeter" ? Math.sin(progress * Math.PI * 7 + bird.phase) * 0.16 : 0;
+        const hoverFacing = bird.flightStyle === "hover" && progress >= bird.hoverStart && progress <= bird.hoverEnd
+          ? Math.sin(progress * Math.PI * 6 + bird.phase) * 0.04
+          : 0;
+        const rotation = clamp(
+          bird.bank + bankFromCurvature + Math.sin(progress * Math.PI * 2 + bird.phase) * 0.018 + pitchFromVelocity + teeter + hoverFacing,
+          -0.32,
+          0.32,
+        );
         
         const species = RAPTORS.find((r) => r.id === bird.raptorId);
         const speciesScale = species?.sizeScale ?? 1;
@@ -721,6 +815,8 @@ export function App() {
     setDifficulty(selectedDifficulty);
     setPlayerCounts(makeCounts());
     setActualCounts(makeCounts());
+    setStreaks(makeStreaks());
+    setLastStreakEvent(null);
     setTimeLeft(ROUND_SECONDS);
     setCountdown(3);
     actualCountsRef.current = makeCounts();
@@ -760,18 +856,28 @@ export function App() {
   }, [phase]);
 
   const fetchLeaderboard = useCallback(async () => {
+    setIsLeaderboardLoading(true);
+    setLeaderboardError("");
     const { data, error } = await supabase
       .from("kestrel_high_scores")
       .select("*")
       .eq("level", difficulty)
       .order("score", { ascending: false })
+      .order("created_at", { ascending: true })
       .limit(5);
-    if (!error && data) {
-      setLeaderboard(data);
-      if (phase === "results") {
-        const qualifies = data.length < 5 || totalScore > (data[data.length - 1]?.score ?? 0);
-        setQualifiesForHighScore(qualifies && totalScore > 0);
-      }
+
+    setIsLeaderboardLoading(false);
+
+    if (error) {
+      setLeaderboardError("Could not load high scores. Check the Supabase table and RLS policies.");
+      return;
+    }
+
+    const scores = data ?? [];
+    setLeaderboard(scores);
+    if (phase === "results") {
+      const qualifies = scores.length < 5 || totalScore > (scores[scores.length - 1]?.score ?? 0);
+      setQualifiesForHighScore(qualifies && totalScore > 0);
     }
   }, [difficulty, phase, totalScore]);
 
@@ -780,6 +886,9 @@ export function App() {
       setQualifiesForHighScore(false);
       setHasSubmitted(false);
       setPlayerName("");
+      setSubmitError("");
+      setLeaderboardError("");
+      setIsLeaderboardLoading(false);
       return undefined;
     }
 
@@ -805,32 +914,52 @@ export function App() {
     e.preventDefault();
     if (!playerName.trim() || isSubmitting) return;
     setIsSubmitting(true);
-    const { error } = await supabase
+    setSubmitError("");
+
+    const baseScorePayload = {
+      player_name: playerName.trim(),
+      score: totalScore,
+      level: difficulty,
+      accuracy,
+      total_counted: totalPlayer,
+      total_actual: totalActual,
+      kestrel_count: playerCounts.americanKestrel,
+      coopers_hawk_count: playerCounts.coopersHawk,
+      golden_eagle_count: playerCounts.goldenEagle,
+      northern_harrier_count: playerCounts.northernHarrier,
+      red_shouldered_hawk_count: playerCounts.redShoulderedHawk,
+      red_tailed_hawk_count: playerCounts.redTailedHawk,
+      turkey_vulture_count: playerCounts.turkeyVulture,
+    };
+
+    const fullScorePayload = {
+      ...baseScorePayload,
+      bald_eagle_count: playerCounts.baldEagle,
+      white_tailed_kite_count: playerCounts.whiteTailedKite,
+      osprey_count: playerCounts.osprey,
+    };
+
+    let { error } = await supabase
       .from("kestrel_high_scores")
-      .insert([
-        {
-          player_name: playerName.trim(),
-          score: totalScore,
-          level: difficulty,
-          accuracy,
-          total_counted: totalPlayer,
-          total_actual: totalActual,
-          kestrel_count: playerCounts.americanKestrel,
-          coopers_hawk_count: playerCounts.coopersHawk,
-          golden_eagle_count: playerCounts.goldenEagle,
-          northern_harrier_count: playerCounts.northernHarrier,
-          red_shouldered_hawk_count: playerCounts.redShoulderedHawk,
-          red_tailed_hawk_count: playerCounts.redTailedHawk,
-          turkey_vulture_count: playerCounts.turkeyVulture,
-          bald_eagle_count: playerCounts.baldEagle,
-          white_tailed_kite_count: playerCounts.whiteTailedKite,
-          osprey_count: playerCounts.osprey,
-        },
-      ]);
-    setIsSubmitting(false);
-    if (!error) {
-      setHasSubmitted(true);
+      .insert([fullScorePayload]);
+
+    if (error && error.message.toLowerCase().includes("column")) {
+      const retry = await supabase
+        .from("kestrel_high_scores")
+        .insert([baseScorePayload]);
+      error = retry.error;
     }
+
+    setIsSubmitting(false);
+
+    if (error) {
+      setSubmitError(error.message || "Could not save high score.");
+      return;
+    }
+
+    setHasSubmitted(true);
+    setQualifiesForHighScore(false);
+    await fetchLeaderboard();
   };
 
   const countRaptor = (raptorId: RaptorId) => {
@@ -839,6 +968,26 @@ export function App() {
       ...current,
       [raptorId]: current[raptorId] + 1,
     }));
+    
+    setStreaks((current) => {
+      const actual = actualCountsRef.current[raptorId];
+      const playerNewCount = playerCounts[raptorId] + 1;
+      const isExact = playerNewCount === actual;
+      const isClose = Math.abs(playerNewCount - actual) <= 1;
+      
+      if (isExact) {
+        const newStreak = current[raptorId] + 1;
+        const multiplier = getMultiplier(newStreak);
+        if (multiplier > 1) {
+          setLastStreakEvent({ raptorId, multiplier, timestamp: Date.now() });
+        }
+        return { ...current, [raptorId]: newStreak };
+      } else if (isClose) {
+        return { ...current, [raptorId]: 0 };
+      } else {
+        return { ...current, [raptorId]: 0 };
+      }
+    });
   };
 
   return (
@@ -909,6 +1058,12 @@ export function App() {
       {phase === "playing" && (
         <section className="game-screen">
           <canvas ref={canvasRef} className="game-canvas" aria-label="Raptors flying across the sky" />
+          {lastStreakEvent && Date.now() - lastStreakEvent.timestamp < 1500 && (
+            <div className="streak-flash" key={lastStreakEvent.timestamp}>
+              <span className="streak-multiplier">{lastStreakEvent.multiplier}x</span>
+              <span className="streak-label">COMBO!</span>
+            </div>
+          )}
           <header className="hud">
             <div className="hud-item">
               <Clock3 aria-hidden="true" />
@@ -918,11 +1073,18 @@ export function App() {
               <Target aria-hidden="true" />
               <span>{DIFFICULTY[difficulty].label}</span>
             </div>
+            {Math.max(...Object.values(streaks)) >= 2 && (
+              <div className="hud-item streak-hud">
+                <span className="streak-indicator">
+                  {getMultiplier(Math.max(...Object.values(streaks)))}x STREAK
+                </span>
+              </div>
+            )}
           </header>
           <div className="tap-panel" aria-label="Raptor counters">
             {UNIQUE_RAPTORS.map((raptor) => (
               <button
-                className="raptor-button"
+                className={`raptor-button ${streaks[raptor.id] >= 2 ? 'has-streak' : ''}`}
                 key={raptor.id}
                 onClick={() => countRaptor(raptor.id)}
                 style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
@@ -930,6 +1092,9 @@ export function App() {
               >
                 <span>{raptor.shortName}</span>
                 <strong>{playerCounts[raptor.id]}</strong>
+                {streaks[raptor.id] >= 2 && (
+                  <span className="button-streak">{getMultiplier(streaks[raptor.id])}x</span>
+                )}
               </button>
             ))}
           </div>
@@ -1009,12 +1174,17 @@ export function App() {
                       {isSubmitting ? "Saving..." : "Submit"}
                     </button>
                   </div>
+                  {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
                 </form>
               )}
 
               <div className="leaderboard-list">
-                {leaderboard.length === 0 ? (
-                  <p className="no-scores">Loading leaderboard...</p>
+                {isLeaderboardLoading ? (
+                  <p className="leaderboard-message">Loading leaderboard...</p>
+                ) : leaderboardError ? (
+                  <p className="leaderboard-message error-message">{leaderboardError}</p>
+                ) : leaderboard.length === 0 ? (
+                  <p className="leaderboard-message">No high scores yet.</p>
                 ) : (
                   leaderboard.map((item, idx) => (
                     <div

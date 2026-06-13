@@ -332,6 +332,93 @@ button {
   transform: translateY(1px);
 }
 
+.raptor-button.has-streak {
+  box-shadow: 0 0 20px rgba(244, 191, 96, 0.4);
+  animation: streak-pulse 0.8s ease-in-out infinite;
+}
+
+.button-streak {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--accent);
+  color: #102a2f;
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.streak-flash {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  animation: streak-flash-anim 1.5s ease-out forwards;
+}
+
+.streak-multiplier {
+  font-size: clamp(4rem, 12vw, 8rem);
+  font-weight: 900;
+  color: var(--accent);
+  text-shadow: 0 0 40px rgba(244, 191, 96, 0.8), 0 4px 20px rgba(0, 0, 0, 0.5);
+  line-height: 1;
+}
+
+.streak-label {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.1em;
+}
+
+.streak-hud {
+  background: rgba(244, 191, 96, 0.2);
+  border: 2px solid var(--accent);
+}
+
+.streak-indicator {
+  color: var(--accent);
+  font-weight: 900;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+@keyframes streak-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(244, 191, 96, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(244, 191, 96, 0.7);
+  }
+}
+
+@keyframes streak-flash-anim {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  40% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -60%) scale(1);
+  }
+}
+
 .results-screen {
   display: grid;
   place-items: center;
@@ -590,11 +677,15 @@ button {
   color: #cd7f32;
 }
 
-.no-scores {
+.leaderboard-message {
   color: #bedbd3;
   text-align: center;
   font-style: italic;
   margin: 10px 0;
+}
+
+.error-message {
+  color: #ffb4a8;
 }
 
 
