@@ -14,6 +14,24 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
+import {
+  computeAccuracy,
+  computeCappedTotalScore,
+  computeMaxScore,
+  computeScorePerSpecies,
+  computeTotalDelta,
+  computeTotalScore,
+  formatTime,
+  getMultiplier,
+  hash,
+  makeEmptyCounts,
+  randomBetween,
+  RAPTOR_IDS,
+  ROUND_SECONDS,
+  type Counts,
+  type Difficulty,
+  type RaptorId,
+} from "./game";
 import introVideo from "../assets/game_intro.mp4";
 import promoVideo from "../assets/promo.mp4";
 import gameSong from "../assets/game_song.mp3";
@@ -39,7 +57,6 @@ import redShoulderedHawkVentralImage from "../assets/red-shouldered-hawk-ventral
 import redTailedHawkVentralImage from "../assets/red-tailed-hawk-ventral-view.png";
 import turkeyVultureVentralImage from "../assets/turkey-vulture-ventral-view.png";
 
-type Difficulty = "beginner" | "expert";
 type Phase = "intro" | "promo" | "tutorial" | "countdown" | "playing" | "results";
 
 type BeforeInstallPromptEvent = Event & {
@@ -56,18 +73,6 @@ type HighScore = {
   level: Difficulty;
   created_at: string;
 };
-
-type RaptorId =
-  | "americanKestrel"
-  | "coopersHawk"
-  | "goldenEagle"
-  | "northernHarrier"
-  | "redShoulderedHawk"
-  | "redTailedHawk"
-  | "turkeyVulture"
-  | "baldEagle"
-  | "whiteTailedKite"
-  | "osprey";
 
 type ThermalRaptorId =
   | "goldenEagle"
@@ -88,8 +93,6 @@ type Raptor = {
   frames: Frame[];
   sizeScale: number;
 };
-
-type Counts = Record<RaptorId, number>;
 
 type Streaks = Record<RaptorId, number>;
 
@@ -157,7 +160,6 @@ type SpriteAsset = {
   ready: boolean;
 };
 
-const ROUND_SECONDS = 60;
 const PROMO_FALLBACK_MS = 9000;
 const MALE_HARRIER_MIN_ROUND_PROGRESS = 0.35;
 const MALE_HARRIER_CHANCE = 0.18;
@@ -352,19 +354,6 @@ const WHITE_TAILED_KITE_FRAMES = framesFromBounds(
   1080,
 );
 
-const EMPTY_COUNTS: Counts = {
-  americanKestrel: 0,
-  coopersHawk: 0,
-  goldenEagle: 0,
-  northernHarrier: 0,
-  redShoulderedHawk: 0,
-  redTailedHawk: 0,
-  turkeyVulture: 0,
-  baldEagle: 0,
-  whiteTailedKite: 0,
-  osprey: 0,
-};
-
 const RAPTORS: Raptor[] = [
   {
     key: "americanKestrel",
@@ -550,10 +539,6 @@ const DIFFICULTY = {
   }
 >;
 
-function randomBetween([min, max]: [number, number]) {
-  return min + Math.random() * (max - min);
-}
-
 function lerp(start: number, end: number, progress: number) {
   return start + (end - start) * progress;
 }
@@ -569,11 +554,6 @@ function quadraticBezier(start: number, control: number, end: number, progress: 
 
 function fade(t: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10);
-}
-
-function hash(x: number): number {
-  const s = Math.sin(x * 127.1 + 311.7) * 43758.5453;
-  return s - Math.floor(s);
 }
 
 function smoothNoise(seed: number, t: number): number {
@@ -672,23 +652,11 @@ function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
 }
 
 function makeCounts(): Counts {
-  return { ...EMPTY_COUNTS };
+  return makeEmptyCounts();
 }
 
 function makeStreaks(): Streaks {
-  return { ...EMPTY_COUNTS };
-}
-
-function getMultiplier(streak: number): number {
-  if (streak >= 4) return 5;
-  if (streak >= 3) return 3;
-  if (streak >= 2) return 2;
-  return 1;
-}
-
-function formatTime(seconds: number) {
-  const clamped = Math.max(0, Math.ceil(seconds));
-  return `0:${String(clamped).padStart(2, "0")}`;
+  return makeEmptyCounts();
 }
 
 const LAST_SECONDS_WARNING = 10;
@@ -824,52 +792,32 @@ export function App() {
   const phaseRef = useRef<Phase>("intro");
 
   const totalActual = useMemo(
-    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + actualCounts[raptor.id], 0),
+    () => RAPTOR_IDS.reduce((sum, id) => sum + actualCounts[id], 0),
     [actualCounts],
   );
 
   const totalPlayer = useMemo(
-    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + playerCounts[raptor.id], 0),
+    () => RAPTOR_IDS.reduce((sum, id) => sum + playerCounts[id], 0),
     [playerCounts],
   );
 
   const totalDelta = useMemo(
-    () => UNIQUE_RAPTORS.reduce((sum, raptor) => sum + Math.abs(playerCounts[raptor.id] - actualCounts[raptor.id]), 0),
+    () => computeTotalDelta(actualCounts, playerCounts),
     [actualCounts, playerCounts],
   );
 
-  const accuracy = totalActual === 0 ? 0 : Math.max(0, Math.round(((totalActual - totalDelta) / totalActual) * 100));
+  const accuracy = computeAccuracy(actualCounts, playerCounts);
 
-  const scorePerSpecies = useMemo(() => {
-    const multiplier = difficulty === "expert" ? 2 : 1;
-    return UNIQUE_RAPTORS.reduce((acc, raptor) => {
-      const actual = actualCounts[raptor.id];
-      const player = playerCounts[raptor.id];
-      const delta = Math.abs(player - actual);
-      if (actual > 0) {
-        const base = delta === 0 ? 10 : delta === 1 ? 5 : delta === 2 ? 2 : 0;
-        acc[raptor.id] = base * multiplier;
-      } else {
-        // Penalty for over-counting species that were not present in the round
-        const base = delta === 0 ? 0 : delta === 1 ? -5 : delta === 2 ? -8 : -10;
-        acc[raptor.id] = base * multiplier;
-      }
-      return acc;
-    }, {} as Counts);
-  }, [actualCounts, playerCounts, difficulty]);
-
-  const totalScore = useMemo(
-    () => Math.max(0, UNIQUE_RAPTORS.reduce((sum, raptor) => sum + scorePerSpecies[raptor.id], 0)),
-    [scorePerSpecies],
+  const scorePerSpecies = useMemo(
+    () => computeScorePerSpecies(actualCounts, playerCounts, difficulty),
+    [actualCounts, playerCounts, difficulty],
   );
 
-  const maxScore = useMemo(() => {
-    const multiplier = difficulty === "expert" ? 2 : 1;
-    const speciesWithBirds = UNIQUE_RAPTORS.filter((r) => actualCounts[r.id] > 0).length;
-    return speciesWithBirds * 10 * multiplier;
-  }, [actualCounts, difficulty]);
+  const totalScore = useMemo(() => computeTotalScore(scorePerSpecies), [scorePerSpecies]);
 
-  const cappedTotalScore = Math.min(totalScore, maxScore);
+  const maxScore = useMemo(() => computeMaxScore(actualCounts, difficulty), [actualCounts, difficulty]);
+
+  const cappedTotalScore = computeCappedTotalScore(totalScore, maxScore);
 
   useEffect(() => {
     const backdrop = new Image();
