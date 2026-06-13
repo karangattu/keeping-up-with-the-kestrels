@@ -14,15 +14,27 @@ import promoVideo from "../assets/promo.mp4";
 import posterImage from "../assets/game_poster.jpg";
 import logoImage from "../assets/SFBBO_Logo_Rounded.png";
 import backdropImage from "../assets/backdrop.png";
+import americanKestrelSheet from "../assets/american-kestrel-sprite-sheet.png";
+import coopersHawkSheet from "../assets/coopers-hawk-sprite-sheet.png";
+import goldenEagleSheet from "../assets/golden-eagle-sprite-sheet.png";
 import redShoulderedHawkSheet from "../assets/red-shouldered-hawk-sprite-sheet.png";
-import redTailedHawkSheet from "../assets/red-tailed-hawk sprite-sheet.png";
+import redTailedHawkSheet from "../assets/red-tailed-hawk-sprite-sheet.png";
 import turkeyVultureSheet from "../assets/turkey-vulture-sprite-sheet.png";
-import whiteTailedKiteSheet from "../assets/white-tailed-kite-sprite-sheet.png";
+import northernHarrierSheet from "../assets/northern-harrier-sprite-sheet.png";
 
 type Difficulty = "beginner" | "expert";
 type Phase = "intro" | "promo" | "countdown" | "playing" | "results";
 
-type RaptorId = "redTailedHawk" | "redShoulderedHawk" | "turkeyVulture" | "whiteTailedKite";
+type RaptorId =
+  | "americanKestrel"
+  | "coopersHawk"
+  | "goldenEagle"
+  | "northernHarrier"
+  | "redShoulderedHawk"
+  | "redTailedHawk"
+  | "turkeyVulture";
+
+type Frame = { sx: number; sy: number; sw: number; sh: number };
 
 type Raptor = {
   id: RaptorId;
@@ -30,6 +42,7 @@ type Raptor = {
   shortName: string;
   sheet: string;
   tint: string;
+  frames: Frame[];
 };
 
 type Counts = Record<RaptorId, number>;
@@ -63,22 +76,66 @@ type SpriteAsset = {
 
 const ROUND_SECONDS = 60;
 const PROMO_FALLBACK_MS = 9000;
-const FRAME_COLUMNS = 4;
-const FRAME_ROWS = 4;
+const HAWK_FRAMES: Frame[] = [
+  { sx: 35, sy: 75, sw: 560, sh: 335 },
+  { sx: 650, sy: 75, sw: 450, sh: 335 },
+  { sx: 1200, sy: 75, sw: 385, sh: 335 },
+  { sx: 35, sy: 500, sw: 560, sh: 345 },
+  { sx: 650, sy: 500, sw: 450, sh: 345 },
+  { sx: 1200, sy: 500, sw: 385, sh: 345 },
+];
+
+const HARRIER_FRAMES: Frame[] = [
+  { sx: 35, sy: 30, sw: 625, sh: 450 },
+  { sx: 705, sy: 30, sw: 475, sh: 450 },
+  { sx: 1310, sy: 30, sw: 495, sh: 450 },
+  { sx: 35, sy: 650, sw: 625, sh: 350 },
+  { sx: 705, sy: 650, sw: 475, sh: 350 },
+  { sx: 1310, sy: 650, sw: 495, sh: 350 },
+];
+
 const EMPTY_COUNTS: Counts = {
-  redTailedHawk: 0,
+  americanKestrel: 0,
+  coopersHawk: 0,
+  goldenEagle: 0,
+  northernHarrier: 0,
   redShoulderedHawk: 0,
+  redTailedHawk: 0,
   turkeyVulture: 0,
-  whiteTailedKite: 0,
 };
 
 const RAPTORS: Raptor[] = [
   {
-    id: "redTailedHawk",
-    name: "Red-tailed Hawk",
-    shortName: "Red-tailed",
-    sheet: redTailedHawkSheet,
-    tint: "#d68538",
+    id: "americanKestrel",
+    name: "American Kestrel",
+    shortName: "Kestrel",
+    sheet: americanKestrelSheet,
+    tint: "#e8a84c",
+    frames: HAWK_FRAMES,
+  },
+  {
+    id: "coopersHawk",
+    name: "Cooper's Hawk",
+    shortName: "Cooper's",
+    sheet: coopersHawkSheet,
+    tint: "#8ca6a9",
+    frames: HAWK_FRAMES,
+  },
+  {
+    id: "goldenEagle",
+    name: "Golden Eagle",
+    shortName: "Eagle",
+    sheet: goldenEagleSheet,
+    tint: "#6b5c43",
+    frames: HAWK_FRAMES,
+  },
+  {
+    id: "northernHarrier",
+    name: "Northern Harrier",
+    shortName: "Harrier",
+    sheet: northernHarrierSheet,
+    tint: "#ab8660",
+    frames: HARRIER_FRAMES,
   },
   {
     id: "redShoulderedHawk",
@@ -86,6 +143,15 @@ const RAPTORS: Raptor[] = [
     shortName: "Red-shouldered",
     sheet: redShoulderedHawkSheet,
     tint: "#c35a32",
+    frames: HAWK_FRAMES,
+  },
+  {
+    id: "redTailedHawk",
+    name: "Red-tailed Hawk",
+    shortName: "Red-tailed",
+    sheet: redTailedHawkSheet,
+    tint: "#d68538",
+    frames: HAWK_FRAMES,
   },
   {
     id: "turkeyVulture",
@@ -93,13 +159,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Vulture",
     sheet: turkeyVultureSheet,
     tint: "#7b5547",
-  },
-  {
-    id: "whiteTailedKite",
-    name: "White-tailed Kite",
-    shortName: "Kite",
-    sheet: whiteTailedKiteSheet,
-    tint: "#d8dde0",
+    frames: HAWK_FRAMES,
   },
 ];
 
@@ -108,7 +168,7 @@ const DIFFICULTY = {
     label: "Beginner",
     spawnEvery: [1350, 1850],
     maxBirds: 3,
-    flightDuration: [7600, 11200],
+    flightDuration: [3000, 4500],
     farScale: [0.12, 0.18],
     nearScale: [0.36, 0.52],
   },
@@ -116,7 +176,7 @@ const DIFFICULTY = {
     label: "Expert",
     spawnEvery: [640, 1020],
     maxBirds: 7,
-    flightDuration: [5200, 8200],
+    flightDuration: [1800, 2800],
     farScale: [0.09, 0.16],
     nearScale: [0.28, 0.46],
   },
@@ -140,9 +200,6 @@ function lerp(start: number, end: number, progress: number) {
   return start + (end - start) * progress;
 }
 
-function easeInOut(progress: number) {
-  return progress * progress * (3 - 2 * progress);
-}
 
 function quadraticBezier(start: number, control: number, end: number, progress: number) {
   const inverse = 1 - progress;
@@ -236,37 +293,26 @@ export function App() {
     const config = DIFFICULTY[difficulty];
     const raptor = RAPTORS[Math.floor(Math.random() * RAPTORS.length)];
     const direction: 1 | -1 = Math.random() > 0.5 ? 1 : -1;
-    const startsNearHorizon = Math.random() > 0.28;
-    const startX = startsNearHorizon
-      ? randomBetween([viewWidth * 0.08, viewWidth * 0.92])
-      : direction === 1
-        ? -120
-        : viewWidth + 120;
-    const startY = startsNearHorizon
-      ? randomBetween([viewHeight * 0.08, viewHeight * 0.34])
-      : randomBetween([viewHeight * 0.16, viewHeight * 0.46]);
-    const endX = direction === 1
-      ? randomBetween([viewWidth * 0.64, viewWidth + 180])
-      : randomBetween([-180, viewWidth * 0.36]);
-    const endY = randomBetween([viewHeight * 0.52, viewHeight * 0.82]);
-    const controlX = randomBetween([viewWidth * 0.3, viewWidth * 0.7]);
-    const controlY = randomBetween([viewHeight * 0.18, viewHeight * 0.48]);
+    const startX = direction === 1 ? -120 : viewWidth + 120;
+    const yVal = randomBetween([viewHeight * 0.15, viewHeight * 0.55]);
+    const endX = direction === 1 ? viewWidth + 120 : -120;
+    const scaleVal = randomBetween(config.nearScale);
     const bird: Bird = {
       id: birdIdRef.current,
       raptorId: raptor.id,
       direction,
       startX,
-      startY,
-      controlX,
-      controlY,
+      startY: yVal,
+      controlX: viewWidth / 2,
+      controlY: yVal,
       endX,
-      endY,
+      endY: yVal,
       startedAt: timestamp,
       duration: randomBetween(config.flightDuration),
-      farScale: randomBetween(config.farScale),
-      nearScale: randomBetween(config.nearScale),
-      bank: randomBetween([0.06, 0.18]) * direction,
-      bob: randomBetween([2, 8]),
+      farScale: scaleVal,
+      nearScale: scaleVal,
+      bank: 0,
+      bob: randomBetween([2, 6]),
       phase: Math.random() * Math.PI * 2,
       frameOffset: Math.floor(Math.random() * 16),
     };
@@ -312,11 +358,10 @@ export function App() {
       .map((bird) => {
         const rawProgress = (timestamp - bird.startedAt) / bird.duration;
         const progress = Math.min(1, Math.max(0, rawProgress));
-        const eased = easeInOut(progress);
         const overhead = Math.sin(Math.PI * progress);
-        const x = quadraticBezier(bird.startX, bird.controlX, bird.endX, eased);
-        const y = quadraticBezier(bird.startY, bird.controlY, bird.endY, eased)
-          + Math.sin(timestamp * 0.003 + bird.phase) * bird.bob;
+        const x = quadraticBezier(bird.startX, bird.controlX, bird.endX, progress);
+        const y = quadraticBezier(bird.startY, bird.controlY, bird.endY, progress)
+          + Math.sin((timestamp / 90 + bird.frameOffset) * (2 * Math.PI / 6)) * bird.bob;
         const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12));
         const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
         const rotation = Math.sin(progress * Math.PI * 2 + bird.phase) * bird.bank;
@@ -337,13 +382,14 @@ export function App() {
       const sprite = images[bird.raptorId];
       if (!sprite.ready || sprite.width === 0) continue;
 
-      const cellWidth = sprite.width / FRAME_COLUMNS;
-      const cellHeight = sprite.height / FRAME_ROWS;
-      const frame = (Math.floor(timestamp / 90) + bird.frameOffset) % (FRAME_COLUMNS * FRAME_ROWS);
-      const sx = (frame % FRAME_COLUMNS) * cellWidth;
-      const sy = Math.floor(frame / FRAME_COLUMNS) * cellHeight;
-      const drawWidth = cellWidth * scale;
-      const drawHeight = cellHeight * scale;
+      const raptorConfig = RAPTORS.find((r) => r.id === bird.raptorId);
+      if (!raptorConfig) continue;
+
+      const frames = raptorConfig.frames;
+      const frameIndex = (Math.floor(timestamp / 90) + bird.frameOffset) % frames.length;
+      const { sx, sy, sw, sh } = frames[frameIndex];
+      const drawWidth = sw * scale * 0.7;
+      const drawHeight = sh * scale * 0.7;
 
       ctx.save();
       ctx.translate(x, y);
@@ -353,7 +399,7 @@ export function App() {
       ctx.shadowColor = "rgba(16, 42, 47, 0.18)";
       ctx.shadowBlur = 6 + scale * 10;
       ctx.shadowOffsetY = 3 + scale * 8;
-      ctx.drawImage(sprite.image, sx, sy, cellWidth, cellHeight, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
     }
   }, [difficulty, spawnBird]);
@@ -480,8 +526,6 @@ export function App() {
               <img src={logoImage} alt="SFBBO logo" />
               <span>Raptor Count Challenge</span>
             </div>
-            <h1>Keeping Up with the Kestrels</h1>
-            <p>Watch the flyway for one minute. Tap each raptor name every time you spot that species crossing the sky.</p>
             <div className="difficulty-card" aria-label="Select difficulty">
               {(Object.keys(DIFFICULTY) as Difficulty[]).map((level) => (
                 <button
