@@ -121,14 +121,17 @@ type ThermalBird = {
   raptorId: ThermalRaptorId;
   startedAt: number;
   duration: number;
-  loopCount: 1 | 2;
-  orbitCenterX: number;
-  orbitCenterY: number;
-  orbitRadiusX: number;
-  orbitRadiusY: number;
-  orbitPhase: number;
-  driftX: number;
-  driftY: number;
+  // Horizontal traversal across the top band.
+  direction: 1 | -1;
+  startX: number;
+  endX: number;
+  baseY: number;
+  // Gentle scalloped soaring layered onto the crossing path.
+  glideAmp: number;
+  glidePhase: number;
+  loopCount: number;
+  loopAmpX: number;
+  loopAmpY: number;
   baseScale: number;
   sizeRatio: number;
   turnDirection: 1 | -1;
@@ -917,37 +920,41 @@ export function App() {
 
   const spawnThermalBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
     const raptor = THERMAL_RAPTORS[Math.floor(Math.random() * THERMAL_RAPTORS.length)];
-    const loopCount: 1 | 2 = Math.random() < 0.5 ? 1 : 2;
-    const orbitRadiusX = randomBetween([viewWidth * 0.05, viewWidth * 0.085]);
-    const orbitRadiusY = randomBetween([viewHeight * 0.028, viewHeight * 0.048]);
-    const driftX = randomBetween([-viewWidth * 0.04, viewWidth * 0.04]);
-    const driftY = randomBetween([-viewHeight * 0.008, viewHeight * 0.012]);
-    const safeMinX = orbitRadiusX + Math.abs(driftX) + viewWidth * 0.06;
-    const safeMaxX = viewWidth - safeMinX;
-    const orbitCenterX = randomBetween([safeMinX, Math.max(safeMinX, safeMaxX)]);
-    const minCenterY = viewHeight * (THERMAL_TOP_BAND.min + orbitRadiusY / viewHeight + 0.03);
-    const maxCenterY = viewHeight * (THERMAL_TOP_BAND.max - orbitRadiusY / viewHeight - 0.03);
-    const orbitCenterY = randomBetween([minCenterY, Math.max(minCenterY, maxCenterY)]);
+    const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+    // Enter just off one edge and exit off the other so the crossing reads as continuous flight.
+    const margin = viewWidth * 0.14;
+    const startX = direction === 1 ? -margin : viewWidth + margin;
+    const endX = direction === 1 ? viewWidth + margin : -margin;
+    // Settle into the top band, leaving room for the soaring scallops.
+    const glideAmp = randomBetween([viewHeight * 0.012, viewHeight * 0.024]);
+    const loopAmpY = randomBetween([viewHeight * 0.01, viewHeight * 0.022]);
+    const verticalReach = glideAmp + loopAmpY;
+    const minY = viewHeight * THERMAL_TOP_BAND.min + verticalReach + viewHeight * 0.01;
+    const maxY = viewHeight * THERMAL_TOP_BAND.max - verticalReach - viewHeight * 0.01;
+    const baseY = randomBetween([minY, Math.max(minY, maxY)]);
     const bird: ThermalBird = {
       id: thermalBirdIdRef.current,
       raptorId: raptor.id,
       startedAt: timestamp,
-      duration: randomBetween(loopCount === 1 ? [12000, 16000] : [18000, 23000]),
-      loopCount,
-      orbitCenterX,
-      orbitCenterY,
-      orbitRadiusX,
-      orbitRadiusY,
-      orbitPhase: Math.random() * Math.PI * 2,
-      driftX,
-      driftY,
-      baseScale: randomBetween([0.045, 0.075]),
+      // Far-away birds cross slowly; the long duration keeps the drift gentle.
+      duration: randomBetween([26000, 38000]),
+      direction,
+      startX,
+      endX,
+      baseY,
+      glideAmp,
+      glidePhase: Math.random() * Math.PI * 2,
+      // A few lazy circling loops layered onto the crossing, as raptors do on a thermal.
+      loopCount: randomBetween([2.5, 4.5]),
+      loopAmpX: randomBetween([viewWidth * 0.018, viewWidth * 0.032]),
+      loopAmpY,
+      baseScale: randomBetween([0.03, 0.046]),
       sizeRatio: raptor.sizeRatio,
       turnDirection: Math.random() > 0.5 ? 1 : -1,
       bankPhase: Math.random() * Math.PI * 2,
-      alpha: randomBetween([0.6, 0.78]),
+      alpha: randomBetween([0.55, 0.72]),
       altitudePhase: Math.random() * Math.PI * 2,
-      altitudeAmp: randomBetween([viewHeight * 0.004, viewHeight * 0.01]),
+      altitudeAmp: randomBetween([viewHeight * 0.003, viewHeight * 0.007]),
       wobble: randomBetween([0.003, 0.008]),
     };
 
@@ -1010,19 +1017,24 @@ export function App() {
         if (!sprite?.ready || sprite.width === 0) return null;
 
         const progress = Math.min(1, Math.max(0, (timestamp - bird.startedAt) / bird.duration));
-        const centerX = bird.orbitCenterX + bird.driftX * progress;
-        const centerY = bird.orbitCenterY + bird.driftY * progress;
-        const angle = bird.orbitPhase + bird.turnDirection * progress * bird.loopCount * Math.PI * 2;
-        const fadeEnvelope = Math.sin(Math.PI * progress);
-        const x = centerX + Math.cos(angle) * bird.orbitRadiusX;
-        const unclampedY = centerY
-          + Math.sin(angle) * bird.orbitRadiusY
-          + Math.sin(progress * Math.PI * 3 + bird.altitudePhase) * bird.altitudeAmp;
+        // Ease the crossing so it accelerates in and decelerates out instead of marching at constant speed.
+        const eased = progress * progress * (3 - 2 * progress);
+        const loopAngle = bird.turnDirection * (bird.glidePhase + progress * bird.loopCount * Math.PI * 2);
+        // Steady drift across the band with lazy circling looped on top.
+        const x = lerp(bird.startX, bird.endX, eased) + Math.cos(loopAngle) * bird.loopAmpX;
+        const unclampedY = bird.baseY
+          + Math.sin(progress * Math.PI * 2 + bird.glidePhase) * bird.glideAmp
+          + Math.sin(loopAngle) * bird.loopAmpY
+          + Math.sin(progress * Math.PI * 6 + bird.altitudePhase) * bird.altitudeAmp;
         const y = clamp(unclampedY, viewHeight * THERMAL_TOP_BAND.min, viewHeight * THERMAL_TOP_BAND.max);
-        const scale = bird.baseScale * bird.sizeRatio * (0.96 + fadeEnvelope * 0.08);
-        const rotation = bird.turnDirection * 0.08 * Math.sin(angle + bird.bankPhase)
+        // Fade in/out near the edges so birds don't pop on and off screen.
+        const fadeEnvelope = clamp(Math.min(progress, 1 - progress) / 0.12, 0, 1);
+        const scale = bird.baseScale * bird.sizeRatio;
+        // Bank into the circling turns and add a faint teeter.
+        const rotation = bird.direction * 0.05
+          + bird.turnDirection * 0.07 * Math.cos(loopAngle + bird.bankPhase)
           + Math.sin(progress * Math.PI * 4 + bird.bankPhase) * bird.wobble;
-        const alpha = bird.alpha * (0.45 + fadeEnvelope * 0.55);
+        const alpha = bird.alpha * fadeEnvelope;
 
         return {
           bird,
