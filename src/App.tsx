@@ -1173,8 +1173,33 @@ export function App() {
     setIsSubmitting(true);
     setSubmitError("");
 
+    const trimmedName = playerName.trim();
+
+    const { data: existing, error: lookupError } = await supabase
+      .from("kestrel_high_scores")
+      .select("id, score")
+      .eq("level", difficulty)
+      .ilike("player_name", trimmedName)
+      .order("score", { ascending: false })
+      .limit(1);
+
+    if (lookupError) {
+      setIsSubmitting(false);
+      setSubmitError(lookupError.message || "Could not check existing scores.");
+      return;
+    }
+
+    const bestExisting = existing?.[0];
+    if (bestExisting && bestExisting.score >= totalScore) {
+      setIsSubmitting(false);
+      setHasSubmitted(true);
+      setQualifiesForHighScore(false);
+      await fetchLeaderboard();
+      return;
+    }
+
     const baseScorePayload = {
-      player_name: playerName.trim(),
+      player_name: trimmedName,
       score: totalScore,
       level: difficulty,
       accuracy,
