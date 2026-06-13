@@ -5,6 +5,7 @@ import {
   Gauge,
   Play,
   RotateCcw,
+  SkipForward,
   Smartphone,
   Target,
 } from "lucide-react";
@@ -43,6 +44,7 @@ type Raptor = {
   sheet: string;
   tint: string;
   frames: Frame[];
+  sizeScale: number;
 };
 
 type Counts = Record<RaptorId, number>;
@@ -64,7 +66,8 @@ type Bird = {
   bank: number;
   bob: number;
   phase: number;
-  frameOffset: number;
+  glideFrame: number;
+  flapOffset: number;
 };
 
 type SpriteAsset = {
@@ -112,6 +115,7 @@ const RAPTORS: Raptor[] = [
     sheet: americanKestrelSheet,
     tint: "#e8a84c",
     frames: HAWK_FRAMES,
+    sizeScale: 0.52,
   },
   {
     id: "coopersHawk",
@@ -120,6 +124,7 @@ const RAPTORS: Raptor[] = [
     sheet: coopersHawkSheet,
     tint: "#8ca6a9",
     frames: HAWK_FRAMES,
+    sizeScale: 0.72,
   },
   {
     id: "goldenEagle",
@@ -128,6 +133,7 @@ const RAPTORS: Raptor[] = [
     sheet: goldenEagleSheet,
     tint: "#6b5c43",
     frames: HAWK_FRAMES,
+    sizeScale: 1.55,
   },
   {
     id: "northernHarrier",
@@ -136,6 +142,7 @@ const RAPTORS: Raptor[] = [
     sheet: northernHarrierSheet,
     tint: "#ab8660",
     frames: HARRIER_FRAMES,
+    sizeScale: 0.94,
   },
   {
     id: "redShoulderedHawk",
@@ -144,6 +151,7 @@ const RAPTORS: Raptor[] = [
     sheet: redShoulderedHawkSheet,
     tint: "#c35a32",
     frames: HAWK_FRAMES,
+    sizeScale: 0.86,
   },
   {
     id: "redTailedHawk",
@@ -152,6 +160,7 @@ const RAPTORS: Raptor[] = [
     sheet: redTailedHawkSheet,
     tint: "#d68538",
     frames: HAWK_FRAMES,
+    sizeScale: 1,
   },
   {
     id: "turkeyVulture",
@@ -160,30 +169,34 @@ const RAPTORS: Raptor[] = [
     sheet: turkeyVultureSheet,
     tint: "#7b5547",
     frames: HAWK_FRAMES,
+    sizeScale: 1.32,
   },
 ];
 
 const DIFFICULTY = {
   beginner: {
     label: "Beginner",
-    spawnEvery: [1350, 1850],
+    minBirds: 2,
+    spawnEvery: [1700, 2400],
     maxBirds: 3,
-    flightDuration: [3000, 4500],
-    farScale: [0.12, 0.18],
-    nearScale: [0.36, 0.52],
+    flightDuration: [9000, 12500],
+    farScale: [0.1, 0.14],
+    nearScale: [0.3, 0.38],
   },
   expert: {
     label: "Expert",
-    spawnEvery: [640, 1020],
-    maxBirds: 7,
-    flightDuration: [1800, 2800],
-    farScale: [0.09, 0.16],
-    nearScale: [0.28, 0.46],
+    minBirds: 3,
+    spawnEvery: [1050, 1600],
+    maxBirds: 5,
+    flightDuration: [8200, 11200],
+    farScale: [0.08, 0.13],
+    nearScale: [0.25, 0.34],
   },
 } satisfies Record<
   Difficulty,
   {
     label: string;
+    minBirds: number;
     spawnEvery: [number, number];
     maxBirds: number;
     flightDuration: [number, number];
@@ -200,10 +213,30 @@ function lerp(start: number, end: number, progress: number) {
   return start + (end - start) * progress;
 }
 
+function easeInOut(progress: number) {
+  return progress * progress * (3 - 2 * progress);
+}
 
 function quadraticBezier(start: number, control: number, end: number, progress: number) {
   const inverse = 1 - progress;
   return inverse * inverse * start + 2 * inverse * progress * control + progress * progress * end;
+}
+
+function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
+  const flapCenters = [0.3 + bird.flapOffset, 0.68 - bird.flapOffset];
+  const flapWidth = 0.12;
+
+  for (const center of flapCenters) {
+    const distance = Math.abs(progress - center);
+    if (distance < flapWidth / 2) {
+      const localProgress = (progress - (center - flapWidth / 2)) / flapWidth;
+      const sequence = [2, 1, 0, 1, 2];
+      const sequenceIndex = Math.min(sequence.length - 1, Math.floor(localProgress * sequence.length));
+      return Math.min(sequence[sequenceIndex], frameCount - 1);
+    }
+  }
+
+  return Math.min(bird.glideFrame, frameCount - 1);
 }
 
 function makeCounts(): Counts {
@@ -222,7 +255,6 @@ export function App() {
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
-  const [roundNumber, setRoundNumber] = useState(1);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const backdropRef = useRef<HTMLImageElement | null>(null);
   const imageMapRef = useRef<Record<RaptorId, SpriteAsset> | null>(null);
@@ -293,28 +325,31 @@ export function App() {
     const config = DIFFICULTY[difficulty];
     const raptor = RAPTORS[Math.floor(Math.random() * RAPTORS.length)];
     const direction: 1 | -1 = Math.random() > 0.5 ? 1 : -1;
-    const startX = direction === 1 ? -120 : viewWidth + 120;
-    const yVal = randomBetween([viewHeight * 0.15, viewHeight * 0.55]);
-    const endX = direction === 1 ? viewWidth + 120 : -120;
-    const scaleVal = randomBetween(config.nearScale);
+    const edgePadding = viewWidth * 0.12;
+    const startX = direction === 1 ? -edgePadding : viewWidth + edgePadding;
+    const endX = direction === 1 ? viewWidth + edgePadding : -edgePadding;
+    const startY = randomBetween([viewHeight * 0.16, viewHeight * 0.42]);
+    const endY = startY + randomBetween([-viewHeight * 0.05, viewHeight * 0.08]);
+    const controlY = (startY + endY) / 2 + randomBetween([-viewHeight * 0.035, viewHeight * 0.035]);
     const bird: Bird = {
       id: birdIdRef.current,
       raptorId: raptor.id,
       direction,
       startX,
-      startY: yVal,
+      startY,
       controlX: viewWidth / 2,
-      controlY: yVal,
+      controlY,
       endX,
-      endY: yVal,
+      endY,
       startedAt: timestamp,
       duration: randomBetween(config.flightDuration),
-      farScale: scaleVal,
-      nearScale: scaleVal,
-      bank: 0,
-      bob: randomBetween([2, 6]),
+      farScale: randomBetween(config.farScale),
+      nearScale: randomBetween(config.nearScale),
+      bank: randomBetween([-0.035, 0.035]),
+      bob: randomBetween([1, 3]),
       phase: Math.random() * Math.PI * 2,
-      frameOffset: Math.floor(Math.random() * 16),
+      glideFrame: Math.random() > 0.18 ? 1 : 2,
+      flapOffset: Math.random() * 0.06,
     };
 
     birdIdRef.current += 1;
@@ -346,28 +381,37 @@ export function App() {
 
     drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
 
+    birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
+
     const config = DIFFICULTY[difficulty];
+    while (birdsRef.current.length < config.minBirds) {
+      spawnBird(viewWidth, viewHeight, timestamp - randomBetween([0, 2400]));
+      nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery) * 0.55;
+    }
+
     if (timestamp >= nextSpawnRef.current && birdsRef.current.length < config.maxBirds) {
       spawnBird(viewWidth, viewHeight, timestamp);
       nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery);
     }
 
-    birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
-
     const visibleBirds = birdsRef.current
       .map((bird) => {
         const rawProgress = (timestamp - bird.startedAt) / bird.duration;
         const progress = Math.min(1, Math.max(0, rawProgress));
+        const eased = easeInOut(progress);
         const overhead = Math.sin(Math.PI * progress);
-        const x = quadraticBezier(bird.startX, bird.controlX, bird.endX, progress);
-        const y = quadraticBezier(bird.startY, bird.controlY, bird.endY, progress)
-          + Math.sin((timestamp / 90 + bird.frameOffset) * (2 * Math.PI / 6)) * bird.bob;
-        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12));
+        const x = quadraticBezier(bird.startX, bird.controlX, bird.endX, eased);
+        const y = quadraticBezier(bird.startY, bird.controlY, bird.endY, eased)
+          + Math.sin(timestamp * 0.0014 + bird.phase) * bird.bob;
+        const species = RAPTORS.find((r) => r.id === bird.raptorId);
+        const speciesScale = species?.sizeScale ?? 1;
+        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12)) * speciesScale;
         const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
-        const rotation = Math.sin(progress * Math.PI * 2 + bird.phase) * bird.bank;
+        const rotation = bird.bank + Math.sin(progress * Math.PI * 2 + bird.phase) * 0.012;
 
         return {
           bird,
+          progress,
           x,
           y,
           scale,
@@ -378,7 +422,7 @@ export function App() {
       .sort((a, b) => a.scale - b.scale);
 
     for (const visibleBird of visibleBirds) {
-      const { bird, x, y, scale, alpha, rotation } = visibleBird;
+      const { bird, progress, x, y, scale, alpha, rotation } = visibleBird;
       const sprite = images[bird.raptorId];
       if (!sprite.ready || sprite.width === 0) continue;
 
@@ -386,10 +430,10 @@ export function App() {
       if (!raptorConfig) continue;
 
       const frames = raptorConfig.frames;
-      const frameIndex = (Math.floor(timestamp / 90) + bird.frameOffset) % frames.length;
+      const frameIndex = getFlightFrameIndex(bird, frames.length, progress);
       const { sx, sy, sw, sh } = frames[frameIndex];
-      const drawWidth = sw * scale * 0.7;
-      const drawHeight = sh * scale * 0.7;
+      const drawWidth = sw * scale;
+      const drawHeight = sh * scale;
 
       ctx.save();
       ctx.translate(x, y);
@@ -521,11 +565,8 @@ export function App() {
       {phase === "intro" && (
         <section className="intro-screen">
           <video className="intro-video" poster={posterImage} src={introVideo} autoPlay muted loop playsInline />
+          <img src={logoImage} className="intro-top-logo" alt="SFBBO logo" />
           <div className="intro-overlay">
-            <div className="brand-row">
-              <img src={logoImage} alt="SFBBO logo" />
-              <span>Raptor Count Challenge</span>
-            </div>
             <div className="difficulty-card" aria-label="Select difficulty">
               {(Object.keys(DIFFICULTY) as Difficulty[]).map((level) => (
                 <button
@@ -560,10 +601,10 @@ export function App() {
             onError={() => setPhase("countdown")}
           />
           <div className="promo-status">
-            <div className="brand-row">
-              <img src={logoImage} alt="SFBBO logo" />
-              <span>Get ready to count</span>
-            </div>
+            <button className="skip-promo-button" type="button" onClick={() => setPhase("countdown")}>
+              <SkipForward aria-hidden="true" />
+              Skip promo
+            </button>
           </div>
         </section>
       )}
@@ -614,7 +655,6 @@ export function App() {
             <div className="results-heading">
               <BarChart3 aria-hidden="true" />
               <div>
-                <p>Round {roundNumber} results</p>
                 <h1>{accuracy}% field count accuracy</h1>
               </div>
             </div>
@@ -642,7 +682,6 @@ export function App() {
                 className="secondary-action"
                 type="button"
                 onClick={() => {
-                  setRoundNumber((round) => round + 1);
                   prepareRound(difficulty);
                 }}
               >
