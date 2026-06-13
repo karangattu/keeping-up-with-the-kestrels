@@ -1905,7 +1905,7 @@ export function App() {
                   type="button"
                   aria-label={isSpotlight ? "Tap to finish tutorial" : raptor.shortName}
                 >
-                  <span>{raptor.shortName}</span>
+                  <span className="raptor-button-name">{raptor.shortName}</span>
                   {isSpotlight && (
                     <span className="tutorial-hand" aria-hidden="true">
                       <Hand />
