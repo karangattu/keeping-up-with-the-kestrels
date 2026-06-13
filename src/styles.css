@@ -856,6 +856,33 @@ button {
   font-size: 0.95rem;
 }
 
+.tutorial-button-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.secondary-action-text {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.62);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  padding: 4px 12px;
+  transition: color 0.15s ease;
+}
+
+.secondary-action-text:hover {
+  color: var(--accent);
+}
+
 .tap-panel-tutorial {
   pointer-events: auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));

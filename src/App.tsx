@@ -116,17 +116,28 @@ const MALE_HARRIER_MIN_ROUND_PROGRESS = 0.35;
 const MALE_HARRIER_CHANCE = 0.18;
 
 function framesFromBounds(bounds: Array<[number, number, number, number]>, width: number, height: number, padding = 16): Frame[] {
-  return bounds.map(([minX, minY, maxX, maxY]) => {
-    const sx = Math.max(0, minX - padding);
-    const sy = Math.max(0, minY - padding);
-    const right = Math.min(width, maxX + padding + 1);
-    const bottom = Math.min(height, maxY + padding + 1);
+  const cellW = width / 3;
+  const cellH = height / 2;
+
+  return bounds.map(([minX, minY, maxX, maxY], index) => {
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+
+    const cellLeft = col * cellW;
+    const cellRight = cellLeft + cellW;
+    const cellTop = row * cellH;
+    const cellBottom = cellTop + cellH;
+
+    const sx = Math.max(cellLeft, minX - padding);
+    const sy = Math.max(cellTop, minY - padding);
+    const right = Math.min(cellRight, maxX + padding + 1);
+    const bottom = Math.min(cellBottom, maxY + padding + 1);
 
     return {
       sx,
       sy,
-      sw: right - sx,
-      sh: bottom - sy,
+      sw: Math.max(0, right - sx),
+      sh: Math.max(0, bottom - sy),
     };
   });
 }
@@ -609,6 +620,7 @@ export function App() {
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [countdown, setCountdown] = useState(3);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
+  const [tutorialStep, setTutorialStep] = useState<"welcome" | "spotted" | "success">("welcome");
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
   const [streaks, setStreaks] = useState<Streaks>(() => makeStreaks());
@@ -986,7 +998,7 @@ export function App() {
     if (phase !== "promo") return undefined;
 
     const fallback = window.setTimeout(() => {
-      setPhase("tutorial");
+      startTutorial();
     }, PROMO_FALLBACK_MS);
 
     return () => window.clearTimeout(fallback);
@@ -1111,6 +1123,11 @@ export function App() {
     setPhase("countdown");
   };
 
+  const startTutorial = () => {
+    setTutorialStep("welcome");
+    setPhase("tutorial");
+  };
+
   useEffect(() => {
     if (phase !== "tutorial") return undefined;
 
@@ -1118,53 +1135,63 @@ export function App() {
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
 
+    const spawnTutorialKestrel = (viewWidth: number, viewHeight: number, timestamp: number) => {
+      const raptor = RAPTORS.find((r) => r.key === "americanKestrel");
+      if (!raptor) return;
+      const bird: Bird = {
+        id: birdIdRef.current++,
+        raptorKey: raptor.key,
+        raptorId: raptor.id,
+        flightStyle: "hover",
+        direction: 1,
+        startX: -viewWidth * 0.18,
+        startY: viewHeight * 0.42,
+        hoverX: viewWidth * 0.5,
+        hoverY: viewHeight * 0.36,
+        hoverStart: 0.18,
+        hoverEnd: 0.82,
+        controlX: viewWidth * 0.5,
+        controlY: viewHeight * 0.36,
+        endX: viewWidth * 1.18,
+        endY: viewHeight * 0.42,
+        startedAt: timestamp,
+        duration: 9000,
+        farScale: 0.18,
+        nearScale: 0.42,
+        bank: 0,
+        bob: 2,
+        phase: 0,
+        flapOffset: 0,
+        noiseSeed: 1,
+        soarBias: 0.2,
+        flapCenters: [],
+        altitudePhase: 0,
+        altitudeAmp: viewHeight * 0.03,
+      };
+      bird.flapCenters = generateFlapCenters(bird, SPECIES_BEHAVIOR[raptor.id]);
+      birdsRef.current = [bird];
+    };
+
     const tick = (timestamp: number) => {
       if (phaseRef.current !== "tutorial") return;
-      if (!startTimeRef.current) {
-        startTimeRef.current = timestamp;
-        nextSpawnRef.current = timestamp;
+
+      if (tutorialStep === "spotted") {
+        if (!startTimeRef.current) {
+          startTimeRef.current = timestamp;
+        }
         const canvas = canvasRef.current;
         if (canvas) {
           const rect = canvas.getBoundingClientRect();
-          const viewWidth = rect.width;
-          const viewHeight = rect.height;
-          const raptor = RAPTORS.find((r) => r.key === "americanKestrel");
-          if (raptor) {
-            const bird: Bird = {
-              id: birdIdRef.current++,
-              raptorKey: raptor.key,
-              raptorId: raptor.id,
-              flightStyle: "hover",
-              direction: 1,
-              startX: -viewWidth * 0.18,
-              startY: viewHeight * 0.42,
-              hoverX: viewWidth * 0.5,
-              hoverY: viewHeight * 0.36,
-              hoverStart: 0.18,
-              hoverEnd: 0.82,
-              controlX: viewWidth * 0.5,
-              controlY: viewHeight * 0.36,
-              endX: viewWidth * 1.18,
-              endY: viewHeight * 0.42,
-              startedAt: timestamp,
-              duration: 9000,
-              farScale: 0.18,
-              nearScale: 0.42,
-              bank: 0,
-              bob: 2,
-              phase: 0,
-              flapOffset: 0,
-              noiseSeed: 1,
-              soarBias: 0.2,
-              flapCenters: [],
-              altitudePhase: 0,
-              altitudeAmp: viewHeight * 0.03,
-            };
-            bird.flapCenters = generateFlapCenters(bird, SPECIES_BEHAVIOR[raptor.id]);
-            birdsRef.current.push(bird);
+          const currentBird = birdsRef.current[0];
+          if (birdsRef.current.length === 0 || (currentBird && (timestamp - currentBird.startedAt) > currentBird.duration)) {
+            spawnTutorialKestrel(rect.width, rect.height, timestamp);
           }
         }
+      } else {
+        birdsRef.current = [];
+        startTimeRef.current = 0;
       }
+
       lastFrameRef.current = timestamp;
       drawScene(timestamp);
       animationRef.current = window.requestAnimationFrame(tick);
@@ -1179,7 +1206,7 @@ export function App() {
       }
       birdsRef.current = [];
     };
-  }, [phase, drawScene]);
+  }, [drawScene, phase, tutorialStep]);
 
   useEffect(() => {
     if (phase !== "countdown") return undefined;
@@ -1407,11 +1434,11 @@ export function App() {
             autoPlay
             muted
             playsInline
-            onEnded={() => setPhase("tutorial")}
-            onError={() => setPhase("tutorial")}
+            onEnded={() => startTutorial()}
+            onError={() => startTutorial()}
           />
           <div className="promo-status">
-            <button className="skip-promo-button" type="button" onClick={() => setPhase("tutorial")}>
+            <button className="skip-promo-button" type="button" onClick={() => startTutorial()}>
               <SkipForward aria-hidden="true" />
               Skip promo
             </button>
@@ -1422,22 +1449,58 @@ export function App() {
       {phase === "tutorial" && (
         <section className="game-screen tutorial-screen">
           <canvas ref={canvasRef} className="game-canvas" aria-label="Tutorial bird flying" />
-          <div className="tutorial-card" role="dialog" aria-live="polite">
-            <strong>How to play</strong>
-            <p>Watch this American Kestrel fly by. When you spot one, tap its name below.</p>
-            <button className="primary-action" type="button" onClick={completeTutorial}>
-              <SkipForward aria-hidden="true" />
-              Skip tutorial
-            </button>
-          </div>
+          
+          {tutorialStep === "welcome" && (
+            <div className="tutorial-card" role="dialog" aria-live="polite">
+              <strong>Learn the Basics</strong>
+              <p>You will have 60 seconds to identify and count raptors flying across the sky. Let's practice first.</p>
+              <div className="tutorial-button-group">
+                <button className="primary-action" type="button" onClick={() => setTutorialStep("spotted")}>
+                  <Play aria-hidden="true" />
+                  Show Me a Raptor
+                </button>
+                <button className="secondary-action-text" type="button" onClick={completeTutorial}>
+                  Skip tutorial
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tutorialStep === "spotted" && (
+            <div className="tutorial-card" role="dialog" aria-live="polite">
+              <strong>Spot the Kestrel</strong>
+              <p>An American Kestrel is hovering in the sky. Look closely at its flight pattern, then tap its name below to record it.</p>
+              <button className="secondary-action-text" style={{ marginTop: "10px" }} type="button" onClick={completeTutorial}>
+                Skip tutorial
+              </button>
+            </div>
+          )}
+
+          {tutorialStep === "success" && (
+            <div className="tutorial-card" role="dialog" aria-live="polite">
+              <strong>Spot on!</strong>
+              <p>You successfully identified the Kestrel. Other raptors like Red-tailed Hawks and Turkey Vultures will also appear. Ready?</p>
+              <button className="primary-action" type="button" onClick={completeTutorial}>
+                <Play aria-hidden="true" />
+                Start the game
+              </button>
+            </div>
+          )}
+
           <div className="tap-panel tap-panel-tutorial" aria-label="Raptor counters (tutorial)">
             {TUTORIAL_RAPTORS.map((raptor) => {
-              const isSpotlight = raptor.id === "americanKestrel";
+              const isSpotlight = tutorialStep === "spotted" && raptor.id === "americanKestrel";
+              const isDimmed = tutorialStep === "spotted" && !isSpotlight;
+              const handleBtnClick = () => {
+                if (tutorialStep === "spotted" && raptor.id === "americanKestrel") {
+                  setTutorialStep("success");
+                }
+              };
               return (
                 <button
-                  className={`raptor-button ${isSpotlight ? "tutorial-spotlight" : "tutorial-dim"}`}
+                  className={`raptor-button ${isSpotlight ? "tutorial-spotlight" : isDimmed ? "tutorial-dim" : ""}`}
                   key={raptor.id}
-                  onClick={isSpotlight ? completeTutorial : undefined}
+                  onClick={handleBtnClick}
                   style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
                   type="button"
                   aria-label={isSpotlight ? "Tap to finish tutorial" : raptor.shortName}
