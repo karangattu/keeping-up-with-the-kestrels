@@ -15,6 +15,35 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Suppress errors from browser extensions that inject scripts (e.g. searchAnalyzer.js).
+      (function () {
+        var EXTENSION_PATTERNS = [/searchAnalyzer\.js/i, /Search engine .* is not supported/i];
+        function isExtensionError(error) {
+          if (!error) return false;
+          var message = typeof error === "string" ? error : error.message || "";
+          var filename = error.filename || "";
+          return EXTENSION_PATTERNS.some(function (pattern) {
+            return pattern.test(message) || pattern.test(filename);
+          });
+        }
+        window.addEventListener("error", function (event) {
+          if (isExtensionError(event.error) || isExtensionError(event)) {
+            event.preventDefault();
+            console.warn("Suppressed browser-extension error:", event.error || event.message);
+            return false;
+          }
+        });
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event.reason;
+          if (reason && (isExtensionError(reason) || isExtensionError(reason.message || reason))) {
+            event.preventDefault();
+            console.warn("Suppressed browser-extension rejection:", reason);
+            return false;
+          }
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

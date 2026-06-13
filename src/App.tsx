@@ -807,6 +807,7 @@ export function App() {
     const canvas = canvasRef.current;
     const images = imageMapRef.current;
     if (!canvas || !images) return;
+    const currentPhase = phaseRef.current;
 
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -829,7 +830,7 @@ export function App() {
 
     birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
 
-    if (phase === "playing") {
+    if (currentPhase === "playing") {
       const config = DIFFICULTY[difficulty];
       while (birdsRef.current.length < config.minBirds) {
         spawnBird(viewWidth, viewHeight, timestamp - randomBetween([0, 2400]));
