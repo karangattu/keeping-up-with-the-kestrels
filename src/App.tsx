@@ -1,5 +1,6 @@
 import {
   Clock3,
+  Download,
   Gauge,
   Hand,
   Home,
@@ -40,6 +41,13 @@ import turkeyVultureVentralImage from "../assets/turkey-vulture-ventral-view.png
 
 type Difficulty = "beginner" | "expert";
 type Phase = "intro" | "promo" | "tutorial" | "countdown" | "playing" | "results";
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
+const INSTALL_PROMPT_DISMISSED_KEY = "kestrel.installPromptDismissed";
 
 type HighScore = {
   id: string | number;
@@ -685,10 +693,63 @@ function formatTime(seconds: number) {
 
 export function App() {
   const [phase, setPhase] = useState<Phase>("intro");
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const installPromptEventRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(INSTALL_PROMPT_DISMISSED_KEY) === "1") return;
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (isStandalone) return;
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      installPromptEventRef.current = event as BeforeInstallPromptEvent;
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+      setShowInstallPrompt(true);
+    };
+    const handleAppInstalled = () => {
+      installPromptEventRef.current = null;
+      setInstallPromptEvent(null);
+      setShowInstallPrompt(false);
+    };
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  const dismissInstallPrompt = useCallback(() => {
+    setShowInstallPrompt(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(INSTALL_PROMPT_DISMISSED_KEY, "1");
+    }
+  }, []);
+
+  const acceptInstallPrompt = useCallback(async () => {
+    const promptEvent = installPromptEventRef.current ?? installPromptEvent;
+    if (!promptEvent) {
+      dismissInstallPrompt();
+      return;
+    }
+    installPromptEventRef.current = null;
+    setInstallPromptEvent(null);
+    setShowInstallPrompt(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(INSTALL_PROMPT_DISMISSED_KEY, "1");
+    }
+    await promptEvent.prompt();
+    await promptEvent.userChoice.catch(() => undefined);
+  }, [installPromptEvent, dismissInstallPrompt]);
+
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [countdown, setCountdown] = useState(3);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
@@ -1682,6 +1743,23 @@ export function App() {
           <video className="intro-video" poster={posterImage} src={introVideo} autoPlay muted loop playsInline />
           <img src={logoImage} className="intro-top-logo" alt="SFBBO logo" />
           <div className="intro-overlay">
+            {showInstallPrompt && (
+              <div className="install-prompt" role="dialog" aria-label="Install app">
+                <Download aria-hidden="true" />
+                <div className="install-prompt-copy">
+                  <strong>Install for the best experience</strong>
+                  <span>Add to your home screen for fullscreen play and offline access.</span>
+                </div>
+                <div className="install-prompt-actions">
+                  <button className="secondary-action" type="button" onClick={dismissInstallPrompt}>
+                    Not now
+                  </button>
+                  <button className="primary-action" type="button" onClick={acceptInstallPrompt}>
+                    Install
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="difficulty-card" aria-label="Select difficulty">
               {(Object.keys(DIFFICULTY) as Difficulty[]).map((level) => (
                 <button
@@ -1690,7 +1768,7 @@ export function App() {
                   onClick={() => setDifficulty(level)}
                   type="button"
                 >
-                  <Gauge aria-hidden="true" />
+                  {level === "beginner" ? <Gauge aria-hidden="true" /> : <Target aria-hidden="true" />}
                   <span>{DIFFICULTY[level].label}</span>
                 </button>
               ))}
