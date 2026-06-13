@@ -1,6 +1,7 @@
 import {
   Clock3,
   Gauge,
+  Hand,
   Home,
   Play,
   RotateCcw,
@@ -114,6 +115,25 @@ const ROUND_SECONDS = 60;
 const PROMO_FALLBACK_MS = 9000;
 const MALE_HARRIER_MIN_ROUND_PROGRESS = 0.35;
 const MALE_HARRIER_CHANCE = 0.18;
+const LEADERBOARD_FETCH_LIMIT = 100;
+const LEADERBOARD_SIZE = 5;
+
+function normalizePlayerName(name: string) {
+  return name.trim().toLocaleLowerCase();
+}
+
+function dedupeHighScores(scores: HighScore[]) {
+  const uniqueScores = new Map<string, HighScore>();
+
+  for (const score of scores) {
+    const key = normalizePlayerName(score.player_name);
+    if (!uniqueScores.has(key)) {
+      uniqueScores.set(key, score);
+    }
+  }
+
+  return Array.from(uniqueScores.values()).slice(0, LEADERBOARD_SIZE);
+}
 
 function framesFromBounds(bounds: Array<[number, number, number, number]>, width: number, height: number, padding = 16): Frame[] {
   const cellW = width / 3;
@@ -1239,7 +1259,7 @@ export function App() {
       .eq("level", difficulty)
       .order("score", { ascending: false })
       .order("created_at", { ascending: true })
-      .limit(5);
+      .limit(LEADERBOARD_FETCH_LIMIT);
 
     setIsLeaderboardLoading(false);
 
@@ -1248,10 +1268,10 @@ export function App() {
       return;
     }
 
-    const scores = data ?? [];
+    const scores = dedupeHighScores((data ?? []) as HighScore[]);
     setLeaderboard(scores);
     if (phase === "results") {
-      const qualifies = scores.length < 5 || totalScore > (scores[scores.length - 1]?.score ?? 0);
+      const qualifies = scores.length < LEADERBOARD_SIZE || totalScore > (scores[scores.length - 1]?.score ?? 0);
       setQualifiesForHighScore(qualifies && totalScore > 0);
     }
   }, [difficulty, phase, totalScore]);
@@ -1293,14 +1313,15 @@ export function App() {
     setSubmitError("");
 
     const trimmedName = playerName.trim();
+    const normalizedName = normalizePlayerName(trimmedName);
 
     const { data: existing, error: lookupError } = await supabase
       .from("kestrel_high_scores")
-      .select("id, score")
+      .select("id, score, player_name")
       .eq("level", difficulty)
       .ilike("player_name", trimmedName)
       .order("score", { ascending: false })
-      .limit(1);
+      .limit(LEADERBOARD_FETCH_LIMIT);
 
     if (lookupError) {
       setIsSubmitting(false);
@@ -1308,7 +1329,8 @@ export function App() {
       return;
     }
 
-    const bestExisting = existing?.[0];
+    const bestExisting = (existing ?? []).find((entry) => normalizePlayerName(entry.player_name) === normalizedName)
+      ?? existing?.[0];
     if (bestExisting && bestExisting.score >= totalScore) {
       setIsSubmitting(false);
       setHasSubmitted(true);
@@ -1340,15 +1362,34 @@ export function App() {
       osprey_count: playerCounts.osprey,
     };
 
-    let { error } = await supabase
-      .from("kestrel_high_scores")
-      .insert([fullScorePayload]);
+    let error: { message?: string } | null = null;
 
-    if (error && error.message.toLowerCase().includes("column")) {
-      const retry = await supabase
+    if (bestExisting) {
+      const updateResult = await supabase
         .from("kestrel_high_scores")
-        .insert([baseScorePayload]);
-      error = retry.error;
+        .update(fullScorePayload)
+        .eq("id", bestExisting.id);
+      error = updateResult.error;
+
+      if (error && error.message?.toLowerCase().includes("column")) {
+        const retry = await supabase
+          .from("kestrel_high_scores")
+          .update(baseScorePayload)
+          .eq("id", bestExisting.id);
+        error = retry.error;
+      }
+    } else {
+      const insertResult = await supabase
+        .from("kestrel_high_scores")
+        .insert([fullScorePayload]);
+      error = insertResult.error;
+
+      if (error && error.message.toLowerCase().includes("column")) {
+        const retry = await supabase
+          .from("kestrel_high_scores")
+          .insert([baseScorePayload]);
+        error = retry.error;
+      }
     }
 
     setIsSubmitting(false);
@@ -1509,7 +1550,11 @@ export function App() {
                   aria-label={isSpotlight ? "Tap to finish tutorial" : raptor.shortName}
                 >
                   <span>{raptor.shortName}</span>
-                  {isSpotlight && <span className="tutorial-arrow">Tap me!</span>}
+                  {isSpotlight && (
+                    <span className="tutorial-hand" aria-hidden="true">
+                      <Hand />
+                    </span>
+                  )}
                 </button>
               );
             })}
