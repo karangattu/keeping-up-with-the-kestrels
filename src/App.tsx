@@ -107,23 +107,165 @@ type SpriteAsset = {
 
 const ROUND_SECONDS = 60;
 const PROMO_FALLBACK_MS = 9000;
-const HAWK_FRAMES: Frame[] = [
-  { sx: 35, sy: 75, sw: 560, sh: 335 },
-  { sx: 650, sy: 75, sw: 450, sh: 335 },
-  { sx: 1200, sy: 75, sw: 385, sh: 335 },
-  { sx: 35, sy: 500, sw: 560, sh: 345 },
-  { sx: 650, sy: 500, sw: 450, sh: 345 },
-  { sx: 1200, sy: 500, sw: 385, sh: 345 },
-];
 
-const HARRIER_FRAMES: Frame[] = [
-  { sx: 35, sy: 30, sw: 625, sh: 450 },
-  { sx: 705, sy: 30, sw: 475, sh: 450 },
-  { sx: 1310, sy: 30, sw: 495, sh: 450 },
-  { sx: 35, sy: 650, sw: 625, sh: 350 },
-  { sx: 705, sy: 650, sw: 475, sh: 350 },
-  { sx: 1310, sy: 650, sw: 495, sh: 350 },
-];
+function framesFromBounds(bounds: Array<[number, number, number, number]>, width: number, height: number, padding = 16): Frame[] {
+  return bounds.map(([minX, minY, maxX, maxY]) => {
+    const sx = Math.max(0, minX - padding);
+    const sy = Math.max(0, minY - padding);
+    const right = Math.min(width, maxX + padding + 1);
+    const bottom = Math.min(height, maxY + padding + 1);
+
+    return {
+      sx,
+      sy,
+      sw: right - sx,
+      sh: bottom - sy,
+    };
+  });
+}
+
+const COOPERS_HAWK_FRAMES = framesFromBounds(
+  [
+    [59, 305, 555, 388],
+    [633, 121, 1072, 372],
+    [1177, 26, 1595, 385],
+    [52, 554, 498, 780],
+    [612, 573, 1057, 848],
+    [1150, 587, 1582, 889],
+  ],
+  1672,
+  941,
+);
+
+const AMERICAN_KESTREL_FRAMES = framesFromBounds(
+  [
+    [38, 234, 600, 360],
+    [644, 48, 1063, 334],
+    [1175, 29, 1599, 339],
+    [53, 561, 487, 784],
+    [624, 570, 1032, 853],
+    [1145, 572, 1562, 893],
+  ],
+  1672,
+  941,
+);
+
+const GOLDEN_EAGLE_FRAMES = framesFromBounds(
+  [
+    [22, 266, 612, 416],
+    [681, 96, 1066, 414],
+    [1229, 37, 1581, 413],
+    [110, 552, 494, 811],
+    [649, 557, 1053, 847],
+    [1204, 574, 1580, 828],
+  ],
+  1672,
+  941,
+);
+
+const NORTHERN_HARRIER_FRAMES = framesFromBounds(
+  [
+    [43, 329, 654, 455],
+    [730, 83, 1173, 452],
+    [1330, 33, 1786, 471],
+    [69, 663, 542, 970],
+    [710, 666, 1172, 937],
+    [1316, 684, 1797, 797],
+  ],
+  1920,
+  1080,
+);
+
+const NORTHERN_HARRIER_MALE_FRAMES = framesFromBounds(
+  [
+    [47, 307, 598, 404],
+    [705, 125, 1213, 385],
+    [1340, 47, 1816, 400],
+    [72, 555, 567, 914],
+    [710, 673, 1192, 924],
+    [1335, 754, 1838, 896],
+  ],
+  1920,
+  1080,
+);
+
+const RED_SHOULDERED_HAWK_FRAMES = framesFromBounds(
+  [
+    [24, 251, 601, 398],
+    [677, 99, 1093, 401],
+    [1222, 39, 1558, 400],
+    [127, 580, 496, 811],
+    [674, 588, 1040, 838],
+    [1202, 599, 1552, 819],
+  ],
+  1672,
+  941,
+);
+
+const RED_TAILED_HAWK_FRAMES = framesFromBounds(
+  [
+    [40, 258, 590, 386],
+    [658, 159, 1093, 383],
+    [1210, 79, 1551, 399],
+    [163, 508, 509, 750],
+    [687, 604, 1049, 806],
+    [1206, 617, 1571, 834],
+  ],
+  1672,
+  941,
+);
+
+const TURKEY_VULTURE_FRAMES = framesFromBounds(
+  [
+    [34, 240, 617, 377],
+    [660, 123, 1107, 373],
+    [1216, 58, 1539, 386],
+    [154, 493, 480, 745],
+    [684, 600, 1033, 829],
+    [1211, 607, 1550, 838],
+  ],
+  1672,
+  941,
+);
+
+const BALD_EAGLE_FRAMES = framesFromBounds(
+  [
+    [61, 295, 625, 445],
+    [722, 145, 1226, 453],
+    [1348, 35, 1776, 476],
+    [108, 617, 610, 907],
+    [731, 618, 1213, 990],
+    [1333, 632, 1816, 1011],
+  ],
+  1920,
+  1080,
+);
+
+const OSPREY_FRAMES = framesFromBounds(
+  [
+    [55, 321, 590, 478],
+    [721, 133, 1218, 494],
+    [1347, 37, 1767, 509],
+    [105, 616, 592, 927],
+    [730, 633, 1199, 1014],
+    [1335, 650, 1802, 1012],
+  ],
+  1920,
+  1080,
+);
+
+const WHITE_TAILED_KITE_FRAMES = framesFromBounds(
+  [
+    [48, 344, 646, 474],
+    [741, 111, 1158, 460],
+    [1341, 42, 1741, 483],
+    [91, 669, 578, 976],
+    [751, 676, 1203, 996],
+    [1334, 711, 1821, 847],
+  ],
+  1920,
+  1080,
+);
 
 const EMPTY_COUNTS: Counts = {
   americanKestrel: 0,
@@ -145,7 +287,7 @@ const RAPTORS: Raptor[] = [
     shortName: "American Kestrel",
     sheet: americanKestrelSheet,
     tint: "#e8a84c",
-    frames: HAWK_FRAMES,
+    frames: AMERICAN_KESTREL_FRAMES,
     sizeScale: 0.47,
   },
   {
@@ -154,7 +296,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Cooper's Hawk",
     sheet: coopersHawkSheet,
     tint: "#8ca6a9",
-    frames: HAWK_FRAMES,
+    frames: COOPERS_HAWK_FRAMES,
     sizeScale: 0.62,
   },
   {
@@ -163,7 +305,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Golden Eagle",
     sheet: goldenEagleSheet,
     tint: "#6b5c43",
-    frames: HAWK_FRAMES,
+    frames: GOLDEN_EAGLE_FRAMES,
     sizeScale: 1.42,
   },
   {
@@ -172,7 +314,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Northern Harrier",
     sheet: northernHarrierSheet,
     tint: "#ab8660",
-    frames: HARRIER_FRAMES,
+    frames: NORTHERN_HARRIER_FRAMES,
     sizeScale: 0.89,
   },
   {
@@ -181,7 +323,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Northern Harrier",
     sheet: northernHarrierMaleSheet,
     tint: "#8a9ba8",
-    frames: HARRIER_FRAMES,
+    frames: NORTHERN_HARRIER_MALE_FRAMES,
     sizeScale: 0.86,
   },
   {
@@ -190,7 +332,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Red-shouldered Hawk",
     sheet: redShoulderedHawkSheet,
     tint: "#c35a32",
-    frames: HAWK_FRAMES,
+    frames: RED_SHOULDERED_HAWK_FRAMES,
     sizeScale: 0.78,
   },
   {
@@ -199,7 +341,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Red-tailed Hawk",
     sheet: redTailedHawkSheet,
     tint: "#d68538",
-    frames: HAWK_FRAMES,
+    frames: RED_TAILED_HAWK_FRAMES,
     sizeScale: 1,
   },
   {
@@ -208,7 +350,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Turkey Vulture",
     sheet: turkeyVultureSheet,
     tint: "#7b5547",
-    frames: HAWK_FRAMES,
+    frames: TURKEY_VULTURE_FRAMES,
     sizeScale: 1.42,
   },
   {
@@ -217,7 +359,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Bald Eagle",
     sheet: baldEagleSheet,
     tint: "#4a3728",
-    frames: HAWK_FRAMES,
+    frames: BALD_EAGLE_FRAMES,
     sizeScale: 1.66,
   },
   {
@@ -226,7 +368,7 @@ const RAPTORS: Raptor[] = [
     shortName: "White-tailed Kite",
     sheet: whiteTailedKiteSheet,
     tint: "#c4b8a8",
-    frames: HAWK_FRAMES,
+    frames: WHITE_TAILED_KITE_FRAMES,
     sizeScale: 0.85,
   },
   {
@@ -235,7 +377,7 @@ const RAPTORS: Raptor[] = [
     shortName: "Osprey",
     sheet: ospreySheet,
     tint: "#5c4a3a",
-    frames: HAWK_FRAMES,
+    frames: OSPREY_FRAMES,
     sizeScale: 1.35,
   },
 ];
