@@ -66,7 +66,6 @@ type Bird = {
   bank: number;
   bob: number;
   phase: number;
-  glideFrame: number;
   flapOffset: number;
 };
 
@@ -223,8 +222,14 @@ function quadraticBezier(start: number, control: number, end: number, progress: 
 }
 
 function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
-  const flapCenters = [0.3 + bird.flapOffset, 0.68 - bird.flapOffset];
-  const flapWidth = 0.12;
+  const flapCenters = [
+    0.12 + bird.flapOffset,
+    0.32 - bird.flapOffset,
+    0.54 + bird.flapOffset,
+    0.74 - bird.flapOffset,
+    0.92 + bird.flapOffset,
+  ];
+  const flapWidth = 0.10;
 
   for (const center of flapCenters) {
     const distance = Math.abs(progress - center);
@@ -236,7 +241,8 @@ function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
     }
   }
 
-  return Math.min(bird.glideFrame, frameCount - 1);
+  const glideValue = 1.5 + 0.5 * Math.sin(progress * Math.PI * 5 + bird.phase);
+  return Math.min(Math.round(glideValue), frameCount - 1);
 }
 
 function makeCounts(): Counts {
@@ -348,7 +354,6 @@ export function App() {
       bank: randomBetween([-0.035, 0.035]),
       bob: randomBetween([1, 3]),
       phase: Math.random() * Math.PI * 2,
-      glideFrame: Math.random() > 0.18 ? 1 : 2,
       flapOffset: Math.random() * 0.06,
     };
 
