@@ -1245,6 +1245,9 @@ button {
   .tap-panel-tutorial {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     max-width: 360px;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
   }
 
   .tap-panel-tutorial .raptor-button {
@@ -1325,5 +1328,113 @@ button {
   }
   100% {
     transform: rotate(0deg);
+  }
+}
+
+/* Tooltip and micro-animations styling */
+.raptor-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(8, 25, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #f7fbf7;
+  font-size: 0.78rem;
+  width: max-content;
+  max-width: 220px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  pointer-events: none;
+  animation: tooltip-fade-in 0.15s ease-out;
+  line-height: 1.35;
+  text-transform: none; /* prevent uppercase from title */
+}
+
+.raptor-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(8, 25, 30, 0.95) transparent transparent transparent;
+}
+
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.raptor-button.bumped {
+  animation: button-bump 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.raptor-button.bumped .raptor-button-count {
+  animation: count-pop 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes button-bump {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes count-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.floater-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.floater-text {
+  position: absolute;
+  color: var(--accent, #f4bf60);
+  font-size: 1.6rem;
+  font-weight: 900;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  animation: float-up-fade 0.8s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  pointer-events: none;
+}
+
+@keyframes float-up-fade {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  30% {
+    transform: translate(-50%, -100%) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -180%) scale(1);
   }
 }

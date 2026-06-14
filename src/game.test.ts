@@ -270,12 +270,15 @@ describe("difficulty config sanity", () => {
 });
 
 describe("RAPTORS config and profile pictures", () => {
-  test("every raptor has a profile image path", () => {
+  test("every raptor has a profile image path and fact", () => {
     expect(RAPTORS.length).toBeGreaterThan(0);
     RAPTORS.forEach((raptor) => {
       expect(raptor.profile).toBeDefined();
       expect(typeof raptor.profile).toBe("string");
       expect(raptor.profile.length).toBeGreaterThan(0);
+      expect(raptor.fact).toBeDefined();
+      expect(typeof raptor.fact).toBe("string");
+      expect(raptor.fact.length).toBeGreaterThan(0);
     });
   });
 });

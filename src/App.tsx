@@ -103,6 +103,7 @@ export type Raptor = {
   frames: Frame[];
   sizeScale: number;
   profile: string;
+  fact: string;
 };
 
 type Streaks = Record<RaptorId, number>;
@@ -376,6 +377,7 @@ export const RAPTORS: Raptor[] = [
     frames: AMERICAN_KESTREL_FRAMES,
     sizeScale: 0.47,
     profile: americanKestrelProfile,
+    fact: "Small falcon; hovers while hunting on open fields.",
   },
   {
     key: "coopersHawk",
@@ -387,6 +389,7 @@ export const RAPTORS: Raptor[] = [
     frames: COOPERS_HAWK_FRAMES,
     sizeScale: 0.62,
     profile: coopersHawkProfile,
+    fact: "Medium accipiter; banded tail, hunts birds in backyards.",
   },
   {
     key: "goldenEagle",
@@ -398,6 +401,7 @@ export const RAPTORS: Raptor[] = [
     frames: GOLDEN_EAGLE_FRAMES,
     sizeScale: 1.42,
     profile: goldenEagleProfile,
+    fact: "Huge eagle; soaring flight, golden-brown wash on nape.",
   },
   {
     key: "northernHarrier",
@@ -409,6 +413,7 @@ export const RAPTORS: Raptor[] = [
     frames: NORTHERN_HARRIER_FRAMES,
     sizeScale: 0.89,
     profile: northernHarrierProfile,
+    fact: "Low-flying raptor; white rump, owl-like facial disk.",
   },
   {
     key: "northernHarrierMale",
@@ -420,6 +425,7 @@ export const RAPTORS: Raptor[] = [
     frames: NORTHERN_HARRIER_MALE_FRAMES,
     sizeScale: 0.86,
     profile: northernHarrierProfile,
+    fact: "Low-flying raptor; white rump, owl-like facial disk.",
   },
   {
     key: "redShoulderedHawk",
@@ -431,6 +437,7 @@ export const RAPTORS: Raptor[] = [
     frames: RED_SHOULDERED_HAWK_FRAMES,
     sizeScale: 0.78,
     profile: redShoulderedHawkProfile,
+    fact: "Medium hawk; reddish chest, translucent wing crescents.",
   },
   {
     key: "redTailedHawk",
@@ -442,6 +449,7 @@ export const RAPTORS: Raptor[] = [
     frames: RED_TAILED_HAWK_FRAMES,
     sizeScale: 1,
     profile: redTailedHawkProfile,
+    fact: "Large hawk; dark belly band, rufous tail in adults.",
   },
   {
     key: "turkeyVulture",
@@ -453,6 +461,7 @@ export const RAPTORS: Raptor[] = [
     frames: TURKEY_VULTURE_FRAMES,
     sizeScale: 1.42,
     profile: turkeyVultureProfile,
+    fact: "Large scavenger; dihedral wings, rocks side-to-side.",
   },
   {
     key: "baldEagle",
@@ -464,6 +473,7 @@ export const RAPTORS: Raptor[] = [
     frames: BALD_EAGLE_FRAMES,
     sizeScale: 1.66,
     profile: baldEagleProfile,
+    fact: "Huge eagle; white head and tail, wings flat when soaring.",
   },
   {
     key: "whiteTailedKite",
@@ -475,6 +485,7 @@ export const RAPTORS: Raptor[] = [
     frames: WHITE_TAILED_KITE_FRAMES,
     sizeScale: 0.85,
     profile: whiteTailedKiteProfile,
+    fact: "Graceful raptor; white body, black shoulders, hovers.",
   },
   {
     key: "osprey",
@@ -486,6 +497,7 @@ export const RAPTORS: Raptor[] = [
     frames: OSPREY_FRAMES,
     sizeScale: 1.35,
     profile: ospreyProfile,
+    fact: "Fish specialist; dark eye stripe, arched wings.",
   },
 ];
 
@@ -792,6 +804,12 @@ export function App() {
   const [submitError, setSubmitError] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [activeTooltip, setActiveTooltip] = useState<RaptorId | null>(null);
+  const [shownTooltips, setShownTooltips] = useState<Record<RaptorId, boolean>>(() => ({} as Record<RaptorId, boolean>));
+  const tooltipTimerRef = useRef<number | null>(null);
+  const [bumpedButtons, setBumpedButtons] = useState<Record<RaptorId, boolean>>(() => ({} as Record<RaptorId, boolean>));
+  const [floaters, setFloaters] = useState<{ id: number; x: number; y: number; text: string }[]>([]);
+  const floaterIdRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameMusicRef = useRef<HTMLAudioElement | null>(null);
   const rthaAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -1287,6 +1305,9 @@ export function App() {
       if (remaining <= 0) {
         setActualCounts({ ...actualCountsRef.current });
         setPhase("results");
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("kestrel.tutorialSeen", "1");
+        }
         return;
       }
 
@@ -1440,6 +1461,9 @@ export function App() {
     nextSpawnRef.current = 0;
     nextThermalSpawnRef.current = 0;
     setPhase("intro");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("kestrel.tutorialSeen", "1");
+    }
   };
 
   const completeTutorial = () => {
@@ -1741,6 +1765,50 @@ export function App() {
     });
   };
 
+  const triggerTooltip = (raptorId: RaptorId) => {
+    if (typeof window !== "undefined" && window.localStorage.getItem("kestrel.tutorialSeen")) return;
+    if (shownTooltips[raptorId]) return;
+    setActiveTooltip(raptorId);
+    setShownTooltips((prev) => ({ ...prev, [raptorId]: true }));
+    if (tooltipTimerRef.current) {
+      window.clearTimeout(tooltipTimerRef.current);
+    }
+    tooltipTimerRef.current = window.setTimeout(() => {
+      setActiveTooltip(null);
+      tooltipTimerRef.current = null;
+    }, 2000);
+  };
+
+  const handleRaptorButtonClick = (e: React.MouseEvent<HTMLButtonElement>, raptorId: RaptorId) => {
+    playBeep(1200, 60, 0.05);
+    countRaptor(raptorId);
+
+    setBumpedButtons((prev) => ({ ...prev, [raptorId]: true }));
+    window.setTimeout(() => {
+      setBumpedButtons((prev) => ({ ...prev, [raptorId]: false }));
+    }, 180);
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const newFloater = {
+      id: floaterIdRef.current++,
+      x,
+      y,
+      text: "+1",
+    };
+    setFloaters((prev) => [...prev, newFloater]);
+    window.setTimeout(() => {
+      setFloaters((prev) => prev.filter((f) => f.id !== newFloater.id));
+    }, 800);
+
+    setActiveTooltip(null);
+    if (tooltipTimerRef.current) {
+      window.clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+  };
+
   return (
     <main className="app-shell">
       <audio ref={gameMusicRef} src={gameSong} loop preload="auto" />
@@ -1939,12 +2007,19 @@ export function App() {
           <div className="tap-panel" aria-label="Raptor counters">
             {UNIQUE_RAPTORS.map((raptor) => (
               <button
-                className={`raptor-button ${streaks[raptor.id] >= 2 ? 'has-streak' : ''}`}
+                className={`raptor-button ${streaks[raptor.id] >= 2 ? 'has-streak' : ''} ${bumpedButtons[raptor.id] ? 'bumped' : ''}`}
                 key={raptor.id}
-                onClick={() => countRaptor(raptor.id)}
+                onClick={(e) => handleRaptorButtonClick(e, raptor.id)}
+                onMouseEnter={() => triggerTooltip(raptor.id)}
+                onFocus={() => triggerTooltip(raptor.id)}
                 style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
                 type="button"
               >
+                {activeTooltip === raptor.id && (
+                  <div className="raptor-tooltip" role="tooltip">
+                    <strong>{raptor.name}</strong> — {raptor.fact}
+                  </div>
+                )}
                 <div className="raptor-button-header">
                   <img src={raptor.profile} className="raptor-button-profile-pic" alt="" />
                   <span className="raptor-button-name">{raptor.shortName}</span>
@@ -1958,6 +2033,16 @@ export function App() {
               </button>
             ))}
           </div>
+
+          {floaters.length > 0 && (
+            <div className="floater-container">
+              {floaters.map((f) => (
+                <span key={f.id} className="floater-text" style={{ left: f.x, top: f.y }}>
+                  {f.text}
+                </span>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
