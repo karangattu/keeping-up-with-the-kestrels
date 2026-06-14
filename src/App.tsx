@@ -317,7 +317,7 @@ const RED_TAILED_HAWK_FRAMES = framesFromBounds(
 const TURKEY_VULTURE_FRAMES = framesFromBounds(
   [
     [36, 274, 640, 434],
-    [640, 140, 1280, 430],
+    [757, 140, 1280, 430],
     [1396, 66, 1770, 445],
     [176, 565, 554, 858],
     [785, 688, 1188, 953],
