@@ -1300,6 +1300,7 @@ button {
     height: 58px;
     margin: 0 auto;
     color: var(--accent);
+    animation: tilt-phone 3s ease-in-out infinite;
   }
 
   .orientation-lock h1 {
@@ -1312,5 +1313,17 @@ button {
     margin: 0;
     color: #dceee8;
     line-height: 1.5;
+  }
+}
+
+@keyframes tilt-phone {
+  0% {
+    transform: rotate(0deg);
+  }
+  30%, 70% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
   }
 }
