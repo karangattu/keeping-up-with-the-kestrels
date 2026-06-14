@@ -16,6 +16,7 @@ import {
   type Counts,
   type Difficulty,
 } from "./game";
+import { RAPTORS } from "./App";
 
 const STARTER: Counts = {
   ...makeEmptyCounts(),
@@ -265,5 +266,16 @@ describe("difficulty config sanity", () => {
     const beginnerScore = computeScorePerSpecies(actual, player, "beginner").americanKestrel;
     const expertScore = computeScorePerSpecies(actual, player, "expert").americanKestrel;
     expect(expertScore).toBe(beginnerScore * 2);
+  });
+});
+
+describe("RAPTORS config and profile pictures", () => {
+  test("every raptor has a profile image path", () => {
+    expect(RAPTORS.length).toBeGreaterThan(0);
+    RAPTORS.forEach((raptor) => {
+      expect(raptor.profile).toBeDefined();
+      expect(typeof raptor.profile).toBe("string");
+      expect(raptor.profile.length).toBeGreaterThan(0);
+    });
   });
 });

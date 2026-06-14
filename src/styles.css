@@ -441,6 +441,22 @@ button {
   height: 6px;
 }
 
+.raptor-button-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.raptor-button-profile-pic {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--raptor-color);
+  background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
 .raptor-button-name {
   position: relative;
   display: block;
@@ -815,10 +831,20 @@ button {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.species-dot {
-  width: 32px;
-  height: 4px;
-  border-radius: 999px;
+.result-row-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.result-row-profile-pic {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid;
+  background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
 }
 
 .result-row h2 {
@@ -1127,6 +1153,18 @@ button {
 
   .raptor-button::before {
     height: 3px;
+  }
+
+  .raptor-button-header {
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+  }
+
+  .raptor-button-profile-pic {
+    width: 20px;
+    height: 20px;
+    border-width: 1px;
   }
 
   .raptor-button-name {

@@ -51,6 +51,16 @@ import northernHarrierMaleSheet from "../assets/northern-harrier-male-sprite-she
 import baldEagleSheet from "../assets/bald-eagle-sprite-sheet.png";
 import whiteTailedKiteSheet from "../assets/white-tailed-kite-sprite-sheet.png";
 import ospreySheet from "../assets/osprey-sprite-sheet.png";
+import americanKestrelProfile from "../assets/american-kestrel-profile.png";
+import coopersHawkProfile from "../assets/coopers-hawk-profile.png";
+import goldenEagleProfile from "../assets/golden-eagle-profile.png";
+import redShoulderedHawkProfile from "../assets/red-shouldered-hawk-profile.png";
+import redTailedHawkProfile from "../assets/red-tailed-hawk-profile.png";
+import turkeyVultureProfile from "../assets/turkey-vulture-profile.png";
+import northernHarrierProfile from "../assets/northern-harrier-profile.png";
+import baldEagleProfile from "../assets/bald-eagle-profile.png";
+import whiteTailedKiteProfile from "../assets/white-tailed-kite-profile.png";
+import ospreyProfile from "../assets/osprey-profile.png";
 import baldEagleVentralImage from "../assets/bald-eagle-ventral-view.png";
 import goldenEagleVentralImage from "../assets/golden-eagle-ventral-view.png";
 import redShoulderedHawkVentralImage from "../assets/red-shouldered-hawk-ventral-view.png";
@@ -83,7 +93,7 @@ type ThermalRaptorId =
 
 type Frame = { sx: number; sy: number; sw: number; sh: number };
 
-type Raptor = {
+export type Raptor = {
   key: string;
   id: RaptorId;
   name: string;
@@ -92,6 +102,7 @@ type Raptor = {
   tint: string;
   frames: Frame[];
   sizeScale: number;
+  profile: string;
 };
 
 type Streaks = Record<RaptorId, number>;
@@ -354,7 +365,7 @@ const WHITE_TAILED_KITE_FRAMES = framesFromBounds(
   1080,
 );
 
-const RAPTORS: Raptor[] = [
+export const RAPTORS: Raptor[] = [
   {
     key: "americanKestrel",
     id: "americanKestrel",
@@ -364,6 +375,7 @@ const RAPTORS: Raptor[] = [
     tint: "#e8a84c",
     frames: AMERICAN_KESTREL_FRAMES,
     sizeScale: 0.47,
+    profile: americanKestrelProfile,
   },
   {
     key: "coopersHawk",
@@ -374,6 +386,7 @@ const RAPTORS: Raptor[] = [
     tint: "#8ca6a9",
     frames: COOPERS_HAWK_FRAMES,
     sizeScale: 0.62,
+    profile: coopersHawkProfile,
   },
   {
     key: "goldenEagle",
@@ -384,6 +397,7 @@ const RAPTORS: Raptor[] = [
     tint: "#6b5c43",
     frames: GOLDEN_EAGLE_FRAMES,
     sizeScale: 1.42,
+    profile: goldenEagleProfile,
   },
   {
     key: "northernHarrier",
@@ -394,6 +408,7 @@ const RAPTORS: Raptor[] = [
     tint: "#ab8660",
     frames: NORTHERN_HARRIER_FRAMES,
     sizeScale: 0.89,
+    profile: northernHarrierProfile,
   },
   {
     key: "northernHarrierMale",
@@ -404,6 +419,7 @@ const RAPTORS: Raptor[] = [
     tint: "#8a9ba8",
     frames: NORTHERN_HARRIER_MALE_FRAMES,
     sizeScale: 0.86,
+    profile: northernHarrierProfile,
   },
   {
     key: "redShoulderedHawk",
@@ -414,6 +430,7 @@ const RAPTORS: Raptor[] = [
     tint: "#c35a32",
     frames: RED_SHOULDERED_HAWK_FRAMES,
     sizeScale: 0.78,
+    profile: redShoulderedHawkProfile,
   },
   {
     key: "redTailedHawk",
@@ -424,6 +441,7 @@ const RAPTORS: Raptor[] = [
     tint: "#d68538",
     frames: RED_TAILED_HAWK_FRAMES,
     sizeScale: 1,
+    profile: redTailedHawkProfile,
   },
   {
     key: "turkeyVulture",
@@ -434,6 +452,7 @@ const RAPTORS: Raptor[] = [
     tint: "#7b5547",
     frames: TURKEY_VULTURE_FRAMES,
     sizeScale: 1.42,
+    profile: turkeyVultureProfile,
   },
   {
     key: "baldEagle",
@@ -444,6 +463,7 @@ const RAPTORS: Raptor[] = [
     tint: "#4a3728",
     frames: BALD_EAGLE_FRAMES,
     sizeScale: 1.66,
+    profile: baldEagleProfile,
   },
   {
     key: "whiteTailedKite",
@@ -454,6 +474,7 @@ const RAPTORS: Raptor[] = [
     tint: "#c4b8a8",
     frames: WHITE_TAILED_KITE_FRAMES,
     sizeScale: 0.85,
+    profile: whiteTailedKiteProfile,
   },
   {
     key: "osprey",
@@ -464,6 +485,7 @@ const RAPTORS: Raptor[] = [
     tint: "#5c4a3a",
     frames: OSPREY_FRAMES,
     sizeScale: 1.35,
+    profile: ospreyProfile,
   },
 ];
 
@@ -1853,7 +1875,10 @@ export function App() {
                   type="button"
                   aria-label={isSpotlight ? "Tap to finish tutorial" : raptor.shortName}
                 >
-                  <span className="raptor-button-name">{raptor.shortName}</span>
+                  <div className="raptor-button-header">
+                    <img src={raptor.profile} className="raptor-button-profile-pic" alt="" />
+                    <span className="raptor-button-name">{raptor.shortName}</span>
+                  </div>
                   {isSpotlight && (
                     <span className="tutorial-hand" aria-hidden="true">
                       <Hand />
@@ -1920,7 +1945,10 @@ export function App() {
                 style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
                 type="button"
               >
-                <span className="raptor-button-name">{raptor.shortName}</span>
+                <div className="raptor-button-header">
+                  <img src={raptor.profile} className="raptor-button-profile-pic" alt="" />
+                  <span className="raptor-button-name">{raptor.shortName}</span>
+                </div>
                 <span className="raptor-button-footer">
                   <strong className="raptor-button-count">{playerCounts[raptor.id]}</strong>
                   {streaks[raptor.id] >= 2 && (
@@ -2057,8 +2085,10 @@ export function App() {
                     const points = scorePerSpecies[raptor.id];
                     return (
                       <article className="result-row" key={raptor.id}>
-                        <span className="species-dot" style={{ background: raptor.tint }} />
-                        <h2>{raptor.name}</h2>
+                        <div className="result-row-header">
+                          <img src={raptor.profile} className="result-row-profile-pic" alt="" style={{ borderColor: raptor.tint }} />
+                          <h2>{raptor.name}</h2>
+                        </div>
                         <div className="result-row-counts">
                           <span>You: <strong>{playerCounts[raptor.id]}</strong></span>
                           <span>Actual: <strong>{actualCounts[raptor.id]}</strong></span>
