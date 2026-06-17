@@ -663,43 +663,29 @@ function generateFlapCenters(bird: Bird, speciesBehavior: typeof SPECIES_BEHAVIO
   return centers;
 }
 
-type FlightFrame = { frameA: number; frameB: number; blend: number };
-
-function getFlightFrame(bird: Bird, frameCount: number, progress: number): FlightFrame {
+function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
   const flapWidth = bird.flightStyle === "hover" ? 0.26 : 0.18;
 
   for (const center of bird.flapCenters) {
     const distance = Math.abs(progress - center);
     if (distance < flapWidth / 2) {
       const localProgress = (progress - (center - flapWidth / 2)) / flapWidth;
+      // Smoothstep easing so we dwell longer on each frame at the extremes
+      const eased = localProgress * localProgress * (3 - 2 * localProgress);
       const sequence = [0, 1, 2, 1, 0, 3, 4, 5, 4, 3, 0];
-      const exactIndex = localProgress * (sequence.length - 1);
-      const idxA = Math.min(Math.floor(exactIndex), sequence.length - 1);
-      const idxB = Math.min(idxA + 1, sequence.length - 1);
-      const blend = exactIndex - idxA;
-      return {
-        frameA: Math.min(sequence[idxA], frameCount - 1),
-        frameB: Math.min(sequence[idxB], frameCount - 1),
-        blend,
-      };
+      const sequenceIndex = Math.min(sequence.length - 1, Math.floor(eased * sequence.length));
+      return Math.min(sequence[sequenceIndex], frameCount - 1);
     }
   }
 
   if (bird.flightStyle === "hover") {
-    const raw = 1 + Math.sin(progress * Math.PI * 8 + bird.phase) * 0.6;
-    const clamped = clamp(raw, 0, frameCount - 1);
-    const frameA = Math.floor(clamped);
-    const frameB = Math.min(frameA + 1, frameCount - 1);
-    return { frameA, frameB, blend: clamped - frameA };
+    return Math.min(Math.round(1 + Math.sin(progress * Math.PI * 6 + bird.phase) * 0.6), frameCount - 1);
   }
 
   const glideValue = bird.flightStyle === "teeter"
-    ? 0.4 + 0.5 * Math.sin(progress * Math.PI * 3 + bird.phase)
-    : 0.25 + 0.35 * Math.sin(progress * Math.PI * 2 + bird.phase);
-  const clamped = clamp(glideValue, 0, frameCount - 1);
-  const frameA = Math.floor(clamped);
-  const frameB = Math.min(frameA + 1, frameCount - 1);
-  return { frameA, frameB, blend: clamped - frameA };
+    ? 0.4 + 0.5 * Math.sin(progress * Math.PI * 2.4 + bird.phase)
+    : 0.25 + 0.35 * Math.sin(progress * Math.PI * 1.6 + bird.phase);
+  return clamp(Math.round(glideValue), 0, frameCount - 1);
 }
 
 function makeCounts(): Counts {
@@ -1275,37 +1261,20 @@ export function App() {
       if (!raptorConfig) continue;
 
       const frames = raptorConfig.frames;
-      const { frameA, frameB, blend } = getFlightFrame(bird, frames.length, progress);
+      const frameIndex = getFlightFrameIndex(bird, frames.length, progress);
+      const { sx, sy, sw, sh } = frames[frameIndex];
+      const drawWidth = sw * scale;
+      const drawHeight = sh * scale;
 
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(rotation);
       if (bird.direction < 0) ctx.scale(-1, 1);
+      ctx.globalAlpha = alpha;
       ctx.shadowColor = "rgba(16, 42, 47, 0.18)";
       ctx.shadowBlur = 6 + scale * 10;
       ctx.shadowOffsetY = 3 + scale * 8;
-
-      if (frameA === frameB || blend < 0.01) {
-        // Single frame — no blending needed
-        const { sx, sy, sw, sh } = frames[frameA];
-        const drawWidth = sw * scale;
-        const drawHeight = sh * scale;
-        ctx.globalAlpha = alpha;
-        ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-      } else {
-        // Cross-fade between two frames
-        const fA = frames[frameA];
-        const fB = frames[frameB];
-        const drawWidthA = fA.sw * scale;
-        const drawHeightA = fA.sh * scale;
-        const drawWidthB = fB.sw * scale;
-        const drawHeightB = fB.sh * scale;
-
-        ctx.globalAlpha = alpha * (1 - blend);
-        ctx.drawImage(sprite.image, fA.sx, fA.sy, fA.sw, fA.sh, -drawWidthA / 2, -drawHeightA / 2, drawWidthA, drawHeightA);
-        ctx.globalAlpha = alpha * blend;
-        ctx.drawImage(sprite.image, fB.sx, fB.sy, fB.sw, fB.sh, -drawWidthB / 2, -drawHeightB / 2, drawWidthB, drawHeightB);
-      }
+      ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
     }
   }, [difficulty, spawnBird]);
