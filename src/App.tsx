@@ -22,6 +22,7 @@ import {
   computeTotalDelta,
   computeTotalScore,
   formatTime,
+  getFinalCountdownBeep,
   getMultiplier,
   hash,
   makeEmptyCounts,
@@ -821,7 +822,7 @@ export function App() {
   const thermalBirdsRef = useRef<ThermalBird[]>([]);
   const actualCountsRef = useRef<Counts>(makeCounts());
   const startTimeRef = useRef(0);
-  const warningPlayedRef = useRef(false);
+  const lastBeepSecondRef = useRef(0);
   const nextSpawnRef = useRef(0);
   const nextThermalSpawnRef = useRef(0);
   const birdIdRef = useRef(0);
@@ -1279,7 +1280,7 @@ export function App() {
   useEffect(() => {
     if (phase !== "playing") return undefined;
 
-    warningPlayedRef.current = false;
+    lastBeepSecondRef.current = 0;
 
     const tick = (timestamp: number) => {
       if (!startTimeRef.current) {
@@ -1296,10 +1297,11 @@ export function App() {
       drawScene(timestamp);
       setTimeLeft(remaining);
 
-      if (remaining <= LAST_SECONDS_WARNING && !warningPlayedRef.current) {
-        warningPlayedRef.current = true;
-        playBeep(880, 220, 0.2);
-        window.setTimeout(() => playBeep(660, 220, 0.2), 260);
+      const beepSecond = Math.ceil(remaining);
+      const beep = getFinalCountdownBeep(beepSecond);
+      if (beep && beepSecond !== lastBeepSecondRef.current) {
+        lastBeepSecondRef.current = beepSecond;
+        playBeep(beep.frequency, beep.durationMs, beep.peakGain);
       }
 
       if (remaining <= 0) {

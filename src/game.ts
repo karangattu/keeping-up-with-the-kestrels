@@ -38,6 +38,18 @@ export function getMultiplier(streak: number): number {
   return 1;
 }
 
+export function getFinalCountdownBeep(
+  secondsLeft: number,
+): { frequency: number; durationMs: number; peakGain: number } | null {
+  if (secondsLeft < 1 || secondsLeft > 10) return null;
+  const urgency = 11 - secondsLeft;
+  return {
+    frequency: 520 + urgency * 70,
+    durationMs: 80 + urgency * 18,
+    peakGain: 0.08 + urgency * 0.012,
+  };
+}
+
 export function scoreForSpecies(
   actual: number,
   player: number,

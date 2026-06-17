@@ -7,6 +7,7 @@ import {
   computeTotalDelta,
   computeTotalScore,
   formatTime,
+  getFinalCountdownBeep,
   getMultiplier,
   hash,
   makeEmptyCounts,
@@ -73,6 +74,21 @@ describe("getMultiplier", () => {
   test("returns 5x at 4 or more consecutive correct", () => {
     expect(getMultiplier(4)).toBe(5);
     expect(getMultiplier(10)).toBe(5);
+  });
+});
+
+describe("getFinalCountdownBeep", () => {
+  test("ramps up during the last 10 seconds only", () => {
+    expect(getFinalCountdownBeep(11)).toBeNull();
+    expect(getFinalCountdownBeep(0)).toBeNull();
+
+    const first = getFinalCountdownBeep(10);
+    const last = getFinalCountdownBeep(1);
+    expect(first).not.toBeNull();
+    expect(last).not.toBeNull();
+    expect(last!.frequency).toBeGreaterThan(first!.frequency);
+    expect(last!.durationMs).toBeGreaterThan(first!.durationMs);
+    expect(last!.peakGain).toBeGreaterThan(first!.peakGain);
   });
 });
 
