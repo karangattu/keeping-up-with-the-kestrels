@@ -1781,14 +1781,19 @@ export function App() {
     }, 2000);
   };
 
-  const handleRaptorButtonClick = (e: React.MouseEvent<HTMLButtonElement>, raptorId: RaptorId) => {
+  const registerRaptorTapFeedback = (raptorId: RaptorId) => {
     playBeep(1200, 60, 0.05);
-    countRaptor(raptorId);
+    window.navigator.vibrate?.(35);
 
     setBumpedButtons((prev) => ({ ...prev, [raptorId]: true }));
     window.setTimeout(() => {
       setBumpedButtons((prev) => ({ ...prev, [raptorId]: false }));
     }, 180);
+  };
+
+  const handleRaptorButtonClick = (e: React.MouseEvent<HTMLButtonElement>, raptorId: RaptorId) => {
+    registerRaptorTapFeedback(raptorId);
+    countRaptor(raptorId);
 
     const rect = e.currentTarget.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
@@ -1932,13 +1937,14 @@ export function App() {
               const isSpotlight = tutorialStep === "spotted" && raptor.id === "americanKestrel";
               const isDimmed = tutorialStep === "spotted" && !isSpotlight;
               const handleBtnClick = () => {
+                registerRaptorTapFeedback(raptor.id);
                 if (tutorialStep === "spotted" && raptor.id === "americanKestrel") {
                   setTutorialStep("success");
                 }
               };
               return (
                 <button
-                  className={`raptor-button ${isSpotlight ? "tutorial-spotlight" : isDimmed ? "tutorial-dim" : ""}`}
+                  className={`raptor-button ${isSpotlight ? "tutorial-spotlight" : isDimmed ? "tutorial-dim" : ""} ${bumpedButtons[raptor.id] ? "bumped" : ""}`}
                   key={raptor.id}
                   onClick={handleBtnClick}
                   style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
