@@ -69,6 +69,8 @@ import redTailedHawkVentralImage from "../assets/red-tailed-hawk-ventral-view.pn
 import turkeyVultureVentralImage from "../assets/turkey-vulture-ventral-view.png";
 
 type Phase = "intro" | "promo" | "tutorial" | "countdown" | "playing" | "results";
+type TutorialRaptorId = "americanKestrel" | "redTailedHawk" | "turkeyVulture";
+type TutorialStep = "welcome" | TutorialRaptorId | "success";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -509,6 +511,21 @@ const UNIQUE_RAPTORS = RAPTORS.filter(
 const TUTORIAL_RAPTORS = UNIQUE_RAPTORS.filter(
   (raptor) => raptor.id === "americanKestrel" || raptor.id === "redTailedHawk" || raptor.id === "turkeyVulture"
 );
+const TUTORIAL_SEQUENCE = ["americanKestrel", "redTailedHawk", "turkeyVulture"] as const satisfies readonly TutorialRaptorId[];
+const TUTORIAL_COPY = {
+  americanKestrel: {
+    title: "Spot the Kestrel",
+    body: "American Kestrels are small falcons. Look for quick wingbeats and a hover, then tap American Kestrel below.",
+  },
+  redTailedHawk: {
+    title: "Now the Red-tailed Hawk",
+    body: "Red-tailed Hawks are bigger and steadier, with broad wings built for soaring. Tap Red-tailed Hawk below.",
+  },
+  turkeyVulture: {
+    title: "Now the Turkey Vulture",
+    body: "Turkey Vultures hold long wings in a shallow V and rock side-to-side as they glide. Tap Turkey Vulture below.",
+  },
+} satisfies Record<TutorialRaptorId, { title: string; body: string }>;
 
 const SPAWN_RAPTORS = RAPTORS.filter((raptor) => raptor.key !== "northernHarrierMale");
 const MALE_NORTHERN_HARRIER = RAPTORS.find((raptor) => raptor.key === "northernHarrierMale");
@@ -793,7 +810,7 @@ export function App() {
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [countdown, setCountdown] = useState(3);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
-  const [tutorialStep, setTutorialStep] = useState<"welcome" | "spotted" | "success">("welcome");
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep>("welcome");
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
   const [streaks, setStreaks] = useState<Streaks>(() => makeStreaks());
@@ -1485,6 +1502,11 @@ export function App() {
     setPhase("tutorial");
   };
 
+  const advanceTutorial = (raptorId: RaptorId) => {
+    const nextId = TUTORIAL_SEQUENCE[TUTORIAL_SEQUENCE.indexOf(raptorId as TutorialRaptorId) + 1];
+    setTutorialStep(nextId ?? "success");
+  };
+
   useEffect(() => {
     if (phase !== "tutorial") return undefined;
 
@@ -1493,47 +1515,50 @@ export function App() {
     startTimeRef.current = 0;
     lastFrameRef.current = 0;
 
-    const spawnTutorialKestrel = (viewWidth: number, viewHeight: number, timestamp: number) => {
-      const raptor = RAPTORS.find((r) => r.key === "americanKestrel");
+    const spawnTutorialBird = (raptorId: RaptorId, viewWidth: number, viewHeight: number, timestamp: number) => {
+      const raptor = RAPTORS.find((r) => r.id === raptorId && r.key !== "northernHarrierMale");
       if (!raptor) return;
+      const behavior = SPECIES_BEHAVIOR[raptor.id];
+      const isHover = raptor.id === "americanKestrel";
       const bird: Bird = {
         id: birdIdRef.current++,
         raptorKey: raptor.key,
         raptorId: raptor.id,
-        flightStyle: "hover",
+        flightStyle: isHover ? "hover" : behavior.flightStyle,
         direction: 1,
         startX: -viewWidth * 0.18,
-        startY: viewHeight * 0.42,
+        startY: viewHeight * (isHover ? 0.42 : 0.34),
         hoverX: viewWidth * 0.5,
-        hoverY: viewHeight * 0.36,
+        hoverY: viewHeight * (isHover ? 0.36 : 0.3),
         hoverStart: 0.18,
         hoverEnd: 0.82,
         controlX: viewWidth * 0.5,
-        controlY: viewHeight * 0.36,
+        controlY: viewHeight * (isHover ? 0.36 : 0.2),
         endX: viewWidth * 1.18,
-        endY: viewHeight * 0.42,
+        endY: viewHeight * (isHover ? 0.42 : 0.34),
         startedAt: timestamp,
-        duration: 9000,
+        duration: isHover ? 9000 : 7600,
         farScale: 0.18,
-        nearScale: 0.42,
+        nearScale: isHover ? 0.42 : 0.36,
         bank: 0,
-        bob: 2,
+        bob: isHover ? 2 : 1,
         phase: 0,
         flapOffset: 0,
         noiseSeed: 1,
-        soarBias: 0.2,
+        soarBias: behavior.soarBias[1],
         flapCenters: [],
         altitudePhase: 0,
         altitudeAmp: viewHeight * 0.03,
       };
-      bird.flapCenters = generateFlapCenters(bird, SPECIES_BEHAVIOR[raptor.id]);
+      bird.flapCenters = generateFlapCenters(bird, behavior);
       birdsRef.current = [bird];
     };
 
     const tick = (timestamp: number) => {
       if (phaseRef.current !== "tutorial") return;
 
-      if (tutorialStep === "spotted") {
+      const activeRaptorId = TUTORIAL_SEQUENCE.find((id) => id === tutorialStep);
+      if (activeRaptorId) {
         if (!startTimeRef.current) {
           startTimeRef.current = timestamp;
         }
@@ -1541,8 +1566,8 @@ export function App() {
         if (canvas) {
           const rect = canvas.getBoundingClientRect();
           const currentBird = birdsRef.current[0];
-          if (birdsRef.current.length === 0 || (currentBird && (timestamp - currentBird.startedAt) > currentBird.duration)) {
-            spawnTutorialKestrel(rect.width, rect.height, timestamp);
+          if (currentBird?.raptorId !== activeRaptorId || (currentBird && (timestamp - currentBird.startedAt) > currentBird.duration)) {
+            spawnTutorialBird(activeRaptorId, rect.width, rect.height, timestamp);
           }
         }
       } else {
@@ -1902,7 +1927,7 @@ export function App() {
               <strong>Learn the Basics</strong>
               <p>You will have 60 seconds to identify and count raptors flying across the sky. Let's practice first.</p>
               <div className="tutorial-button-group">
-                <button className="primary-action" type="button" onClick={() => setTutorialStep("spotted")}>
+                <button className="primary-action" type="button" onClick={() => setTutorialStep("americanKestrel")}>
                   <Play aria-hidden="true" />
                   Show Me a Raptor
                 </button>
@@ -1913,20 +1938,20 @@ export function App() {
             </div>
           )}
 
-          {tutorialStep === "spotted" && (
-            <div className="tutorial-card" role="dialog" aria-live="polite">
-              <strong>Spot the Kestrel</strong>
-              <p>An American Kestrel is hovering in the sky. Look closely at its flight pattern, then tap its name below to record it.</p>
+          {TUTORIAL_SEQUENCE.map((raptorId) => tutorialStep === raptorId && (
+            <div className="tutorial-card" role="dialog" aria-live="polite" key={raptorId}>
+              <strong>{TUTORIAL_COPY[raptorId].title}</strong>
+              <p>{TUTORIAL_COPY[raptorId].body}</p>
               <button className="secondary-action-text" style={{ marginTop: "10px" }} type="button" onClick={completeTutorial}>
                 Skip tutorial
               </button>
             </div>
-          )}
+          ))}
 
           {tutorialStep === "success" && (
             <div className="tutorial-card" role="dialog" aria-live="polite">
               <strong>Spot on!</strong>
-              <p>You successfully identified the Kestrel. Other raptors like Red-tailed Hawks and Turkey Vultures will also appear. Ready?</p>
+              <p>You identified the Kestrel, Red-tailed Hawk, and Turkey Vulture. Keep using the highlighted buttons in the game when each raptor appears.</p>
               <button className="primary-action" type="button" onClick={completeTutorial}>
                 <Play aria-hidden="true" />
                 Start the game
@@ -1936,12 +1961,12 @@ export function App() {
 
           <div className="tap-panel tap-panel-tutorial" aria-label="Raptor counters (tutorial)">
             {TUTORIAL_RAPTORS.map((raptor) => {
-              const isSpotlight = tutorialStep === "spotted" && raptor.id === "americanKestrel";
-              const isDimmed = tutorialStep === "spotted" && !isSpotlight;
+              const isSpotlight = tutorialStep === raptor.id;
+              const isDimmed = TUTORIAL_SEQUENCE.some((id) => id === tutorialStep) && !isSpotlight;
               const handleBtnClick = () => {
                 registerRaptorTapFeedback(raptor.id);
-                if (tutorialStep === "spotted" && raptor.id === "americanKestrel") {
-                  setTutorialStep("success");
+                if (isSpotlight) {
+                  advanceTutorial(raptor.id);
                 }
               };
               return (
