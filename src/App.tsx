@@ -639,9 +639,12 @@ function getBirdBasePosition(bird: Bird, progress: number): { x: number; y: numb
 
     if (progress <= bird.hoverEnd) {
       const hoverProgress = (progress - bird.hoverStart) / (bird.hoverEnd - bird.hoverStart);
+      const settleIn = easeInOut(clamp(hoverProgress / 0.12, 0, 1));
+      const settleOut = easeInOut(clamp((1 - hoverProgress) / 0.12, 0, 1));
+      const hoverAmount = settleIn * settleOut;
       return {
-        x: bird.hoverX + Math.sin(hoverProgress * Math.PI * 2 + bird.phase) * 7,
-        y: bird.hoverY + Math.sin(hoverProgress * Math.PI * 4 + bird.altitudePhase) * 4,
+        x: bird.hoverX + Math.sin(hoverProgress * Math.PI * 2 + bird.phase) * 7 * hoverAmount,
+        y: bird.hoverY + Math.sin(hoverProgress * Math.PI * 4 + bird.altitudePhase) * 4 * hoverAmount,
       };
     }
 
@@ -680,29 +683,35 @@ function generateFlapCenters(bird: Bird, speciesBehavior: typeof SPECIES_BEHAVIO
   return centers;
 }
 
-function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
+function getFlightFrames(bird: Bird, frameCount: number, progress: number) {
   const flapWidth = bird.flightStyle === "hover" ? 0.26 : 0.18;
 
   for (const center of bird.flapCenters) {
     const distance = Math.abs(progress - center);
     if (distance < flapWidth / 2) {
       const localProgress = (progress - (center - flapWidth / 2)) / flapWidth;
-      // Smoothstep easing so we dwell longer on each frame at the extremes
       const eased = localProgress * localProgress * (3 - 2 * localProgress);
       const sequence = [0, 1, 2, 1, 0, 3, 4, 5, 4, 3, 0];
-      const sequenceIndex = Math.min(sequence.length - 1, Math.floor(eased * sequence.length));
-      return Math.min(sequence[sequenceIndex], frameCount - 1);
+      const sequencePosition = eased * (sequence.length - 1);
+      const sequenceIndex = Math.floor(sequencePosition);
+      return {
+        current: Math.min(sequence[sequenceIndex], frameCount - 1),
+        next: Math.min(sequence[Math.min(sequence.length - 1, sequenceIndex + 1)], frameCount - 1),
+        mix: sequencePosition - sequenceIndex,
+      };
     }
   }
 
   if (bird.flightStyle === "hover") {
-    return Math.min(Math.round(1 + Math.sin(progress * Math.PI * 6 + bird.phase) * 0.6), frameCount - 1);
+    const frame = Math.min(Math.round(1 + Math.sin(progress * Math.PI * 6 + bird.phase) * 0.6), frameCount - 1);
+    return { current: frame, next: frame, mix: 0 };
   }
 
   const glideValue = bird.flightStyle === "teeter"
     ? 0.4 + 0.5 * Math.sin(progress * Math.PI * 2.4 + bird.phase)
     : 0.25 + 0.35 * Math.sin(progress * Math.PI * 1.6 + bird.phase);
-  return clamp(Math.round(glideValue), 0, frameCount - 1);
+  const frame = clamp(Math.round(glideValue), 0, frameCount - 1);
+  return { current: frame, next: frame, mix: 0 };
 }
 
 function makeCounts(): Counts {
@@ -1033,7 +1042,8 @@ export function App() {
     // Settle into the top band, leaving room for the soaring scallops.
     const glideAmp = randomBetween([viewHeight * 0.012, viewHeight * 0.024]);
     const loopAmpY = randomBetween([viewHeight * 0.01, viewHeight * 0.022]);
-    const verticalReach = glideAmp + loopAmpY;
+    const altitudeAmp = randomBetween([viewHeight * 0.003, viewHeight * 0.007]);
+    const verticalReach = glideAmp + loopAmpY + altitudeAmp;
     const minY = viewHeight * THERMAL_TOP_BAND.min + verticalReach + viewHeight * 0.01;
     const maxY = viewHeight * THERMAL_TOP_BAND.max - verticalReach - viewHeight * 0.01;
     const baseY = randomBetween([minY, Math.max(minY, maxY)]);
@@ -1059,7 +1069,7 @@ export function App() {
       bankPhase: Math.random() * Math.PI * 2,
       alpha: randomBetween([0.55, 0.72]),
       altitudePhase: Math.random() * Math.PI * 2,
-      altitudeAmp: randomBetween([viewHeight * 0.003, viewHeight * 0.007]),
+      altitudeAmp,
       wobble: randomBetween([0.003, 0.008]),
     };
 
@@ -1115,7 +1125,6 @@ export function App() {
       }
     }
 
-    const wind = getWind(timestamp);
     const visibleThermalBirds = thermalBirdsRef.current
       .map((bird) => {
         const sprite = thermalImages[bird.raptorId];
@@ -1139,7 +1148,7 @@ export function App() {
         const here = positionAt(progress);
         const ahead = positionAt(Math.min(1, progress + 0.004));
         const x = here.px;
-        const y = clamp(here.py, viewHeight * THERMAL_TOP_BAND.min, viewHeight * THERMAL_TOP_BAND.max);
+        const y = here.py;
         // Fade in/out near the edges so birds don't pop on and off screen.
         const fadeEnvelope = clamp(Math.min(progress, 1 - progress) / 0.12, 0, 1);
         const scale = bird.baseScale * bird.sizeRatio;
@@ -1183,34 +1192,31 @@ export function App() {
         const rawProgress = (timestamp - bird.startedAt) / bird.duration;
         const progress = Math.min(1, Math.max(0, rawProgress));
         const overhead = Math.sin(Math.PI * progress);
-        
-        const base = getBirdBasePosition(bird, progress);
-        
-        const noiseScale = bird.flightStyle === "hover" ? 0.25 : 1;
-        const noiseX = smoothNoise(bird.noiseSeed, progress * 3) * viewWidth * 0.04 * noiseScale;
-        const noiseY = smoothNoise(bird.noiseSeed + 100, progress * 3) * viewHeight * 0.03 * noiseScale;
-        
-        const altitudeVar = Math.sin(progress * Math.PI * 4 + bird.altitudePhase) * bird.altitudeAmp * noiseScale;
-        
-        const windEffect = 1 - overhead * 0.5;
-        const windX = wind.x * viewWidth * 0.08 * windEffect * noiseScale;
-        const windY = wind.y * viewHeight * 0.05 * windEffect * noiseScale;
-        
-        const x = base.x + noiseX + windX;
-        const y = base.y + noiseY + windY + altitudeVar
-          + Math.sin(timestamp * 0.0014 + bird.phase) * bird.bob;
-        
-        const prevProgress = Math.max(0, progress - 0.02);
-        const prevBase = getBirdBasePosition(bird, prevProgress);
-        
-        const nextProgress = Math.min(1, progress + 0.02);
-        const nextBase = getBirdBasePosition(bird, nextProgress);
-        
-        const dx = nextBase.x - prevBase.x;
-        const dy = nextBase.y - prevBase.y;
+        const positionAt = (sampleProgress: number) => {
+          const sampleTime = timestamp + (sampleProgress - progress) * bird.duration;
+          const sampleWind = getWind(sampleTime);
+          const overhead = Math.sin(Math.PI * sampleProgress);
+          const base = getBirdBasePosition(bird, sampleProgress);
+          const noiseScale = bird.flightStyle === "hover" ? 0.25 : 1;
+          const noiseX = smoothNoise(bird.noiseSeed, sampleProgress * 3) * viewWidth * 0.04 * noiseScale;
+          const noiseY = smoothNoise(bird.noiseSeed + 100, sampleProgress * 3) * viewHeight * 0.03 * noiseScale;
+          const altitude = Math.sin(sampleProgress * Math.PI * 4 + bird.altitudePhase) * bird.altitudeAmp * noiseScale;
+          const windEffect = 1 - overhead * 0.5;
+          return {
+            x: base.x + noiseX + sampleWind.x * viewWidth * 0.08 * windEffect * noiseScale,
+            y: base.y + noiseY + sampleWind.y * viewHeight * 0.05 * windEffect * noiseScale + altitude
+              + Math.sin(sampleTime * 0.0014 + bird.phase) * bird.bob,
+          };
+        };
+
+        const { x, y } = positionAt(progress);
+        const prev = positionAt(Math.max(0, progress - 0.02));
+        const next = positionAt(Math.min(1, progress + 0.02));
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
         const velocity = Math.sqrt(dx * dx + dy * dy);
-        const curveX = nextBase.x - base.x;
-        const curveY = nextBase.y - base.y;
+        const curveX = next.x - x;
+        const curveY = next.y - y;
         const curvature = Math.abs(dx * curveY - dy * curveX) / (velocity * velocity + 1);
         
         const bankFromCurvature = clamp(curvature * bird.direction * 4, -0.18, 0.18);
@@ -1227,7 +1233,7 @@ export function App() {
         
         const raptorConfig = RAPTORS.find((r) => r.key === bird.raptorKey);
         const speciesScale = raptorConfig?.sizeScale ?? 1;
-        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(overhead, 1.12)) * speciesScale;
+        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(Math.sin(Math.PI * progress), 1.12)) * speciesScale;
         const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
 
         return {
@@ -1264,8 +1270,9 @@ export function App() {
       }
       
       if (sepCount > 0) {
-        bird.x += (sepX / sepCount) * 0.5;
-        bird.y += (sepY / sepCount) * 0.5;
+        const strength = easeInOut(clamp(Math.hypot(sepX, sepY) / separationDist, 0, 1));
+        bird.x += (sepX / sepCount) * 0.2 * strength;
+        bird.y += (sepY / sepCount) * 0.2 * strength;
       }
     }
 
@@ -1278,8 +1285,8 @@ export function App() {
       if (!raptorConfig) continue;
 
       const frames = raptorConfig.frames;
-      const frameIndex = getFlightFrameIndex(bird, frames.length, progress);
-      const { sx, sy, sw, sh } = frames[frameIndex];
+      const frame = getFlightFrames(bird, frames.length, progress);
+      const { sx, sy, sw, sh } = frames[frame.current];
       const drawWidth = sw * scale;
       const drawHeight = sh * scale;
 
@@ -1287,11 +1294,26 @@ export function App() {
       ctx.translate(x, y);
       ctx.rotate(rotation);
       if (bird.direction < 0) ctx.scale(-1, 1);
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = alpha * (frame.next === frame.current ? 1 : 1 - frame.mix);
       ctx.shadowColor = "rgba(16, 42, 47, 0.18)";
       ctx.shadowBlur = 6 + scale * 10;
       ctx.shadowOffsetY = 3 + scale * 8;
       ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      if (frame.mix > 0 && frame.next !== frame.current) {
+        const nextFrame = frames[frame.next];
+        ctx.globalAlpha = alpha * frame.mix;
+        ctx.drawImage(
+          sprite.image,
+          nextFrame.sx,
+          nextFrame.sy,
+          nextFrame.sw,
+          nextFrame.sh,
+          -(nextFrame.sw * scale) / 2,
+          -(nextFrame.sh * scale) / 2,
+          nextFrame.sw * scale,
+          nextFrame.sh * scale,
+        );
+      }
       ctx.restore();
     }
   }, [difficulty, spawnBird]);
