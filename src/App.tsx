@@ -683,7 +683,7 @@ function generateFlapCenters(bird: Bird, speciesBehavior: typeof SPECIES_BEHAVIO
   return centers;
 }
 
-function getFlightFrames(bird: Bird, frameCount: number, progress: number) {
+function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
   const flapWidth = bird.flightStyle === "hover" ? 0.26 : 0.18;
 
   for (const center of bird.flapCenters) {
@@ -692,26 +692,21 @@ function getFlightFrames(bird: Bird, frameCount: number, progress: number) {
       const localProgress = (progress - (center - flapWidth / 2)) / flapWidth;
       const eased = localProgress * localProgress * (3 - 2 * localProgress);
       const sequence = [0, 1, 2, 1, 0, 3, 4, 5, 4, 3, 0];
-      const sequencePosition = eased * (sequence.length - 1);
-      const sequenceIndex = Math.floor(sequencePosition);
-      return {
-        current: Math.min(sequence[sequenceIndex], frameCount - 1),
-        next: Math.min(sequence[Math.min(sequence.length - 1, sequenceIndex + 1)], frameCount - 1),
-        mix: sequencePosition - sequenceIndex,
-      };
+      const sequenceIndex = Math.min(sequence.length - 1, Math.round(eased * (sequence.length - 1)));
+      return Math.min(sequence[sequenceIndex], frameCount - 1);
     }
   }
 
   if (bird.flightStyle === "hover") {
     const frame = Math.min(Math.round(1 + Math.sin(progress * Math.PI * 6 + bird.phase) * 0.6), frameCount - 1);
-    return { current: frame, next: frame, mix: 0 };
+    return frame;
   }
 
   const glideValue = bird.flightStyle === "teeter"
     ? 0.4 + 0.5 * Math.sin(progress * Math.PI * 2.4 + bird.phase)
     : 0.25 + 0.35 * Math.sin(progress * Math.PI * 1.6 + bird.phase);
   const frame = clamp(Math.round(glideValue), 0, frameCount - 1);
-  return { current: frame, next: frame, mix: 0 };
+  return frame;
 }
 
 function makeCounts(): Counts {
@@ -1285,8 +1280,8 @@ export function App() {
       if (!raptorConfig) continue;
 
       const frames = raptorConfig.frames;
-      const frame = getFlightFrames(bird, frames.length, progress);
-      const { sx, sy, sw, sh } = frames[frame.current];
+      const frameIndex = getFlightFrameIndex(bird, frames.length, progress);
+      const { sx, sy, sw, sh } = frames[frameIndex];
       const drawWidth = sw * scale;
       const drawHeight = sh * scale;
 
@@ -1294,26 +1289,11 @@ export function App() {
       ctx.translate(x, y);
       ctx.rotate(rotation);
       if (bird.direction < 0) ctx.scale(-1, 1);
-      ctx.globalAlpha = alpha * (frame.next === frame.current ? 1 : 1 - frame.mix);
+      ctx.globalAlpha = alpha;
       ctx.shadowColor = "rgba(16, 42, 47, 0.18)";
       ctx.shadowBlur = 6 + scale * 10;
       ctx.shadowOffsetY = 3 + scale * 8;
       ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-      if (frame.mix > 0 && frame.next !== frame.current) {
-        const nextFrame = frames[frame.next];
-        ctx.globalAlpha = alpha * frame.mix;
-        ctx.drawImage(
-          sprite.image,
-          nextFrame.sx,
-          nextFrame.sy,
-          nextFrame.sw,
-          nextFrame.sh,
-          -(nextFrame.sw * scale) / 2,
-          -(nextFrame.sh * scale) / 2,
-          nextFrame.sw * scale,
-          nextFrame.sh * scale,
-        );
-      }
       ctx.restore();
     }
   }, [difficulty, spawnBird]);
