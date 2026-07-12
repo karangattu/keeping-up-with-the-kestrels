@@ -28,7 +28,9 @@ export function makeEmptyCounts(): Counts {
 
 export function formatTime(seconds: number): string {
   const clamped = Math.max(0, Math.ceil(seconds));
-  return `0:${String(clamped).padStart(2, "0")}`;
+  const minutes = Math.floor(clamped / 60);
+  const remainder = clamped % 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
 export function getMultiplier(streak: number): number {
@@ -36,6 +38,13 @@ export function getMultiplier(streak: number): number {
   if (streak >= 3) return 3;
   if (streak >= 2) return 2;
   return 1;
+}
+
+export const COMBO_BASE = 5;
+
+export function getComboReward(comboStreak: number): number {
+  const multiplier = getMultiplier(comboStreak);
+  return multiplier > 1 ? (multiplier - 1) * COMBO_BASE : 0;
 }
 
 export function getFinalCountdownBeep(

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  COMBO_BASE,
   computeAccuracy,
   computeCappedTotalScore,
   computeMaxScore,
@@ -7,6 +8,7 @@ import {
   computeTotalDelta,
   computeTotalScore,
   formatTime,
+  getComboReward,
   getFinalCountdownBeep,
   getMultiplier,
   hash,
@@ -39,8 +41,13 @@ const PERFECT_GUESS: Counts = {
 
 describe("formatTime", () => {
   test("formats whole seconds with two-digit padding", () => {
-    expect(formatTime(60)).toBe("0:60");
+    expect(formatTime(60)).toBe("1:00");
     expect(formatTime(5)).toBe("0:05");
+  });
+
+  test("carries minutes for values at or above 60", () => {
+    expect(formatTime(61)).toBe("1:01");
+    expect(formatTime(120)).toBe("2:00");
   });
 
   test("rounds up partial seconds", () => {
@@ -74,6 +81,25 @@ describe("getMultiplier", () => {
   test("returns 5x at 4 or more consecutive correct", () => {
     expect(getMultiplier(4)).toBe(5);
     expect(getMultiplier(10)).toBe(5);
+  });
+});
+
+describe("getComboReward", () => {
+  test("awards no reward while the streak is still building (>1)", () => {
+    expect(getComboReward(0)).toBe(0);
+    expect(getComboReward(1)).toBe(0);
+  });
+
+  test("awards (multiplier - 1) * COMBO_BASE at 2+ consecutive on-target taps", () => {
+    expect(getComboReward(2)).toBe((getMultiplier(2) - 1) * COMBO_BASE);
+    expect(getComboReward(3)).toBe((getMultiplier(3) - 1) * COMBO_BASE);
+    expect(getComboReward(4)).toBe((getMultiplier(4) - 1) * COMBO_BASE);
+    expect(getComboReward(10)).toBe((getMultiplier(10) - 1) * COMBO_BASE);
+  });
+
+  test("a broken streak (0) yields no reward", () => {
+    expect(getComboReward(0)).toBe(0);
+    expect(getComboReward(-1)).toBe(0);
   });
 });
 

@@ -1,9 +1,11 @@
 import {
+  BookOpen,
   Clock3,
   Download,
   Gauge,
   Hand,
   Home,
+  Pause,
   Play,
   RotateCcw,
   SkipForward,
@@ -16,12 +18,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import {
   computeAccuracy,
-  computeCappedTotalScore,
   computeMaxScore,
   computeScorePerSpecies,
   computeTotalDelta,
   computeTotalScore,
   formatTime,
+  getComboReward,
   getFinalCountdownBeep,
   getMultiplier,
   hash,
@@ -109,7 +111,7 @@ export type Raptor = {
   fact: string;
 };
 
-type Streaks = Record<RaptorId, number>;
+
 
 type Bird = {
   id: number;
@@ -197,6 +199,71 @@ function dedupeHighScores(scores: HighScore[]) {
   }
 
   return Array.from(uniqueScores.values()).slice(0, LEADERBOARD_SIZE);
+}
+
+const PENDING_SCORES_KEY = "kestrel.pendingScores";
+
+function leaderboardCacheKey(level: Difficulty) {
+  return `kestrel.leaderboard.${level}`;
+}
+
+function loadCachedLeaderboard(level: Difficulty): HighScore[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(leaderboardCacheKey(level));
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? (parsed as HighScore[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistCachedLeaderboard(level: Difficulty, scores: HighScore[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(leaderboardCacheKey(level), JSON.stringify(scores));
+  } catch {
+    // ignore quota / privacy-mode write failures
+  }
+}
+
+type PendingHighScore = {
+  payload: Record<string, unknown>;
+  mode: "insert" | "update";
+  targetId?: string | number;
+};
+
+function loadPendingHighScores(): PendingHighScore[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PENDING_SCORES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? (parsed as PendingHighScore[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushPendingHighScore(entry: PendingHighScore) {
+  if (typeof window === "undefined") return;
+  try {
+    const current = loadPendingHighScores();
+    current.push(entry);
+    window.localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
+}
+
+function removePendingHighScore(index: number) {
+  if (typeof window === "undefined") return;
+  try {
+    const current = loadPendingHighScores();
+    const next = current.filter((_, i) => i !== index);
+    window.localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
 }
 
 function framesFromBounds(bounds: Array<[number, number, number, number]>, width: number, height: number, padding = 16): Frame[] {
@@ -713,10 +780,6 @@ function makeCounts(): Counts {
   return makeEmptyCounts();
 }
 
-function makeStreaks(): Streaks {
-  return makeEmptyCounts();
-}
-
 const LAST_SECONDS_WARNING = 10;
 
 let audioContextRef: AudioContext | null = null;
@@ -817,15 +880,21 @@ export function App() {
   const [tutorialStep, setTutorialStep] = useState<TutorialStep>("welcome");
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
-  const [streaks, setStreaks] = useState<Streaks>(() => makeStreaks());
+  const [comboStreak, setComboStreak] = useState(0);
+  const [comboBonus, setComboBonus] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [showFieldGuide, setShowFieldGuide] = useState(false);
+  const [ariaAnnouncement, setAriaAnnouncement] = useState("");
   const [lastStreakEvent, setLastStreakEvent] = useState<{ raptorId: RaptorId; multiplier: number; timestamp: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<HighScore[]>([]);
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState("");
+  const [leaderboardOffline, setLeaderboardOffline] = useState(false);
   const [qualifiesForHighScore, setQualifiesForHighScore] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [submitOfflineNotice, setSubmitOfflineNotice] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<RaptorId | null>(null);
@@ -844,6 +913,13 @@ export function App() {
   const thermalImageMapRef = useRef<Record<ThermalRaptorId, SpriteAsset> | null>(null);
   const thermalBirdsRef = useRef<ThermalBird[]>([]);
   const actualCountsRef = useRef<Counts>(makeCounts());
+  const playerCountsRef = useRef<Counts>(makeCounts());
+  const comboStreakRef = useRef(0);
+  const comboBonusRef = useRef(0);
+  const pausedRef = useRef(false);
+  const pausedAtRef = useRef(0);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressTriggeredRef = useRef(false);
   const startTimeRef = useRef(0);
   const lastBeepSecondRef = useRef(0);
   const nextSpawnRef = useRef(0);
@@ -877,11 +953,12 @@ export function App() {
     [actualCounts, playerCounts, difficulty],
   );
 
-  const totalScore = useMemo(() => computeTotalScore(scorePerSpecies), [scorePerSpecies]);
+  const totalScore = useMemo(
+    () => computeTotalScore(scorePerSpecies) + comboBonus,
+    [scorePerSpecies, comboBonus],
+  );
 
   const maxScore = useMemo(() => computeMaxScore(actualCounts, difficulty), [actualCounts, difficulty]);
-
-  const cappedTotalScore = computeCappedTotalScore(totalScore, maxScore);
 
   useEffect(() => {
     const backdrop = new Image();
@@ -911,6 +988,8 @@ export function App() {
             asset.width = image.naturalWidth;
             asset.height = image.naturalHeight;
             asset.ready = true;
+          } else {
+            console.warn(`Failed to load raptor sprite sheet for "${raptor.key}".`);
           }
         });
 
@@ -942,6 +1021,8 @@ export function App() {
             asset.width = image.naturalWidth;
             asset.height = image.naturalHeight;
             asset.ready = true;
+          } else {
+            console.warn(`Failed to load thermal image for "${raptor.id}".`);
           }
         });
 
@@ -1304,6 +1385,11 @@ export function App() {
     lastBeepSecondRef.current = 0;
 
     const tick = (timestamp: number) => {
+      if (pausedRef.current) {
+        animationRef.current = window.requestAnimationFrame(tick);
+        return;
+      }
+
       if (!startTimeRef.current) {
         startTimeRef.current = timestamp;
         nextSpawnRef.current = timestamp + 450;
@@ -1444,10 +1530,14 @@ export function App() {
     setDifficulty(selectedDifficulty);
     setPlayerCounts(makeCounts());
     setActualCounts(makeCounts());
-    setStreaks(makeStreaks());
+    setComboStreak(0);
+    setComboBonus(0);
     setLastStreakEvent(null);
     setTimeLeft(ROUND_SECONDS);
     setCountdown(3);
+    playerCountsRef.current = makeCounts();
+    comboStreakRef.current = 0;
+    comboBonusRef.current = 0;
     actualCountsRef.current = makeCounts();
     birdsRef.current = [];
     thermalBirdsRef.current = [];
@@ -1458,6 +1548,9 @@ export function App() {
     birdIdRef.current = 0;
     thermalBirdIdRef.current = 0;
     hasSpawnedMaleHarrierRef.current = false;
+    pausedRef.current = false;
+    pausedAtRef.current = 0;
+    setPaused(false);
     startGameMusic();
     setPhase("promo");
   };
@@ -1483,9 +1576,36 @@ export function App() {
     lastFrameRef.current = 0;
     nextSpawnRef.current = 0;
     nextThermalSpawnRef.current = 0;
+    pausedRef.current = false;
+    pausedAtRef.current = 0;
+    setPaused(false);
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
     setPhase("intro");
     if (typeof window !== "undefined") {
       window.localStorage.setItem("kestrel.tutorialSeen", "1");
+    }
+  };
+
+  const togglePause = () => {
+    if (phaseRef.current !== "playing") return;
+    if (!pausedRef.current) {
+      pausedRef.current = true;
+      pausedAtRef.current = performance.now();
+      setPaused(true);
+      gameMusicRef.current?.pause();
+    } else {
+      const pauseDuration = performance.now() - pausedAtRef.current;
+      if (startTimeRef.current > 0) startTimeRef.current += pauseDuration;
+      nextSpawnRef.current += pauseDuration;
+      nextThermalSpawnRef.current += pauseDuration;
+      pausedAtRef.current = 0;
+      lastBeepSecondRef.current = 0;
+      pausedRef.current = false;
+      setPaused(false);
+      void gameMusicRef.current?.play().catch(() => undefined);
     }
   };
 
@@ -1628,12 +1748,24 @@ export function App() {
     setIsLeaderboardLoading(false);
 
     if (error) {
-      setLeaderboardError("Could not load high scores. Check the Supabase table and RLS policies.");
+      const cached = loadCachedLeaderboard(difficulty);
+      if (cached.length > 0) {
+        setLeaderboard(cached);
+        setLeaderboardOffline(true);
+        setLeaderboardError("");
+        // Qualification can't be validated offline — hide the submit form.
+        setQualifiesForHighScore(false);
+      } else {
+        setLeaderboardOffline(false);
+        setLeaderboardError("Could not load high scores. Check the Supabase table and RLS policies.");
+      }
       return;
     }
 
     const scores = dedupeHighScores((data ?? []) as HighScore[]);
     setLeaderboard(scores);
+    setLeaderboardOffline(false);
+    persistCachedLeaderboard(difficulty, scores);
     if (phase === "results") {
       const qualifies = scores.length < LEADERBOARD_SIZE || totalScore > (scores[scores.length - 1]?.score ?? 0);
       setQualifiesForHighScore(qualifies && totalScore > 0);
@@ -1646,7 +1778,9 @@ export function App() {
       setHasSubmitted(false);
       setPlayerName("");
       setSubmitError("");
+      setSubmitOfflineNotice("");
       setLeaderboardError("");
+      setLeaderboardOffline(false);
       setIsLeaderboardLoading(false);
       setShowBreakdown(false);
       return undefined;
@@ -1727,6 +1861,9 @@ export function App() {
     };
 
     let error: { message?: string } | null = null;
+    let chosenPayload: Record<string, unknown> = fullScorePayload;
+    const chosenMode: "insert" | "update" = bestExisting ? "update" : "insert";
+    const chosenTargetId: string | number | undefined = bestExisting?.id;
 
     if (bestExisting) {
       const updateResult = await supabase
@@ -1741,8 +1878,10 @@ export function App() {
           .update(baseScorePayload)
           .eq("id", bestExisting.id);
         error = retry.error;
+        chosenPayload = baseScorePayload;
       }
     } else {
+      chosenPayload = fullScorePayload;
       const insertResult = await supabase
         .from("kestrel_high_scores")
         .insert([fullScorePayload]);
@@ -1753,47 +1892,111 @@ export function App() {
           .from("kestrel_high_scores")
           .insert([baseScorePayload]);
         error = retry.error;
+        chosenPayload = baseScorePayload;
       }
     }
 
     setIsSubmitting(false);
 
     if (error) {
-      setSubmitError(error.message || "Could not save high score.");
+      pushPendingHighScore({ payload: chosenPayload, mode: chosenMode, targetId: chosenTargetId });
+      setSubmitError("");
+      setHasSubmitted(true);
+      setQualifiesForHighScore(false);
+      setSubmitOfflineNotice("Saved locally — will sync to the leaderboard when you're back online.");
       return;
     }
 
     setHasSubmitted(true);
     setQualifiesForHighScore(false);
+    setSubmitOfflineNotice("");
     await fetchLeaderboard();
   };
 
-  const countRaptor = (raptorId: RaptorId) => {
-    if (phase !== "playing") return;
-    setPlayerCounts((current) => ({
-      ...current,
-      [raptorId]: current[raptorId] + 1,
-    }));
-    
-    setStreaks((current) => {
-      const actual = actualCountsRef.current[raptorId];
-      const playerNewCount = playerCounts[raptorId] + 1;
-      const isExact = playerNewCount === actual;
-      const isClose = Math.abs(playerNewCount - actual) <= 1;
-      
-      if (isExact) {
-        const newStreak = current[raptorId] + 1;
-        const multiplier = getMultiplier(newStreak);
-        if (multiplier > 1) {
-          setLastStreakEvent({ raptorId, multiplier, timestamp: Date.now() });
-        }
-        return { ...current, [raptorId]: newStreak };
-      } else if (isClose) {
-        return { ...current, [raptorId]: 0 };
+  const flushPendingHighScores = useCallback(async () => {
+    const pending = loadPendingHighScores();
+    if (pending.length === 0) return;
+
+    let changed = false;
+    for (let i = pending.length - 1; i >= 0; i--) {
+      const entry = pending[i];
+      let res;
+      if (entry.mode === "update" && entry.targetId != null) {
+        res = await supabase
+          .from("kestrel_high_scores")
+          .update(entry.payload)
+          .eq("id", entry.targetId);
       } else {
-        return { ...current, [raptorId]: 0 };
+        res = await supabase
+          .from("kestrel_high_scores")
+          .insert([entry.payload]);
       }
-    });
+      if (!res.error) {
+        removePendingHighScore(i);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      setSubmitOfflineNotice("Synced your saved score to the leaderboard.");
+      await fetchLeaderboard();
+    }
+  }, [fetchLeaderboard]);
+
+  useEffect(() => {
+    const handleOnline = () => { void flushPendingHighScores(); };
+    if (typeof window === "undefined") return undefined;
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [flushPendingHighScores]);
+
+  const countRaptor = (raptorId: RaptorId) => {
+    if (phaseRef.current !== "playing" || pausedRef.current) return;
+
+    playerCountsRef.current = {
+      ...playerCountsRef.current,
+      [raptorId]: playerCountsRef.current[raptorId] + 1,
+    };
+    setPlayerCounts(playerCountsRef.current);
+
+    const raptorName = UNIQUE_RAPTORS.find((r) => r.id === raptorId)?.shortName ?? raptorId;
+    const actual = actualCountsRef.current[raptorId];
+    const delta = playerCountsRef.current[raptorId] - actual;
+    const onTarget = Math.abs(delta) <= 1;
+    const newStreak = onTarget ? comboStreakRef.current + 1 : 0;
+    comboStreakRef.current = newStreak;
+    setComboStreak(newStreak);
+
+    const multiplier = getMultiplier(newStreak);
+    const reward = getComboReward(newStreak);
+    if (reward > 0) {
+      comboBonusRef.current += reward;
+      setComboBonus(comboBonusRef.current);
+    }
+    if (multiplier > 1) {
+      setLastStreakEvent({ raptorId, multiplier, timestamp: Date.now() });
+      setAriaAnnouncement(`${raptorName} counted. ${multiplier} times combo. Total counted ${RAPTOR_IDS.reduce((s, id) => s + playerCountsRef.current[id], 0)}.`);
+    } else {
+      setAriaAnnouncement(`${raptorName} counted. Total counted ${RAPTOR_IDS.reduce((s, id) => s + playerCountsRef.current[id], 0)}.`);
+    }
+  };
+
+  const decrementRaptor = (raptorId: RaptorId) => {
+    if (phaseRef.current !== "playing" || pausedRef.current) return;
+    if (playerCountsRef.current[raptorId] <= 0) return;
+
+    playerCountsRef.current = {
+      ...playerCountsRef.current,
+      [raptorId]: playerCountsRef.current[raptorId] - 1,
+    };
+    setPlayerCounts(playerCountsRef.current);
+
+    comboStreakRef.current = 0;
+    setComboStreak(0);
+    setBumpedButtons((prev) => ({ ...prev, [raptorId]: true }));
+    window.setTimeout(() => {
+      setBumpedButtons((prev) => ({ ...prev, [raptorId]: false }));
+    }, 180);
   };
 
   const triggerTooltip = (raptorId: RaptorId) => {
@@ -1820,7 +2023,39 @@ export function App() {
     }, 180);
   };
 
+  const handleRaptorPointerDown = (raptorId: RaptorId) => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      playBeep(700, 80, 0.06);
+      window.navigator.vibrate?.(45);
+      decrementRaptor(raptorId);
+    }, 450);
+  };
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
   const handleRaptorButtonClick = (e: React.MouseEvent<HTMLButtonElement>, raptorId: RaptorId) => {
+    clearLongPress();
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      setActiveTooltip(null);
+      if (tooltipTimerRef.current) {
+        window.clearTimeout(tooltipTimerRef.current);
+        tooltipTimerRef.current = null;
+      }
+      return;
+    }
+
     registerRaptorTapFeedback(raptorId);
     countRaptor(raptorId);
 
@@ -1895,6 +2130,10 @@ export function App() {
               <Play aria-hidden="true" />
               Start round
             </button>
+            <button className="secondary-action" type="button" onClick={() => setShowFieldGuide(true)}>
+              <BookOpen aria-hidden="true" />
+              Field guide
+            </button>
           </div>
         </section>
       )}
@@ -1927,7 +2166,7 @@ export function App() {
           {tutorialStep === "welcome" && (
             <div className="tutorial-card" role="dialog" aria-live="polite">
               <strong>Learn the Basics</strong>
-              <p>You will have 60 seconds to identify and count raptors flying across the sky. Let's practice first.</p>
+              <p>You will have 60 seconds to identify and count raptors flying across the sky. Ten species can appear — let's practice three common ones first.</p>
               <div className="tutorial-button-group">
                 <button className="primary-action" type="button" onClick={() => setTutorialStep("americanKestrel")}>
                   <Play aria-hidden="true" />
@@ -2024,11 +2263,27 @@ export function App() {
               <Target aria-hidden="true" />
               <span>{DIFFICULTY[difficulty].label}</span>
             </div>
-            {Math.max(...Object.values(streaks)) >= 2 && (
+            {comboStreak >= 2 && (
               <div className="hud-item streak-hud">
                 <span className="streak-indicator">
-                  {getMultiplier(Math.max(...Object.values(streaks)))}x STREAK
+                  {getMultiplier(comboStreak)}x STREAK
                 </span>
+              </div>
+            )}
+            <button
+              className="hud-item hud-quit-button"
+              type="button"
+              onClick={togglePause}
+              aria-label={paused ? "Resume round" : "Pause round"}
+            >
+              {paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
+              <span>{paused ? "Resume" : "Pause"}</span>
+            </button>
+            {paused && (
+              <div className="pause-overlay" role="status" aria-live="polite">
+                <Pause aria-hidden="true" />
+                <strong>Paused</strong>
+                <span>Tap resume to continue your round</span>
               </div>
             )}
             <button
@@ -2041,16 +2296,25 @@ export function App() {
               <span>Quit</span>
             </button>
           </header>
+          <div className="sr-only" aria-live="polite" role="status">{ariaAnnouncement}</div>
           <div className="tap-panel" aria-label="Raptor counters">
-            {UNIQUE_RAPTORS.map((raptor) => (
+            {UNIQUE_RAPTORS.map((raptor) => {
+              const isStreakSpecies = lastStreakEvent?.raptorId === raptor.id && comboStreak >= 2;
+              return (
               <button
-                className={`raptor-button ${streaks[raptor.id] >= 2 ? 'has-streak' : ''} ${bumpedButtons[raptor.id] ? 'bumped' : ''}`}
+                className={`raptor-button ${isStreakSpecies ? 'has-streak' : ''} ${bumpedButtons[raptor.id] ? 'bumped' : ''}`}
                 key={raptor.id}
                 onClick={(e) => handleRaptorButtonClick(e, raptor.id)}
+                onPointerDown={() => handleRaptorPointerDown(raptor.id)}
+                onPointerUp={clearLongPress}
+                onPointerLeave={clearLongPress}
+                onPointerCancel={clearLongPress}
+                onContextMenu={(e) => { e.preventDefault(); decrementRaptor(raptor.id); }}
                 onMouseEnter={() => triggerTooltip(raptor.id)}
                 onFocus={() => triggerTooltip(raptor.id)}
                 style={{ "--raptor-color": raptor.tint } as React.CSSProperties}
                 type="button"
+                aria-label={`${raptor.shortName}: ${playerCounts[raptor.id]} counted. Tap to count, long-press to undo.`}
               >
                 {activeTooltip === raptor.id && (
                   <div className="raptor-tooltip" role="tooltip">
@@ -2063,12 +2327,13 @@ export function App() {
                 </div>
                 <span className="raptor-button-footer">
                   <strong className="raptor-button-count">{playerCounts[raptor.id]}</strong>
-                  {streaks[raptor.id] >= 2 && (
-                    <span className="button-streak">{getMultiplier(streaks[raptor.id])}x<span className="button-streak-label"> streak</span></span>
+                  {isStreakSpecies && (
+                    <span className="button-streak">{getMultiplier(comboStreak)}x<span className="button-streak-label"> combo</span></span>
                   )}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {floaters.length > 0 && (
@@ -2091,8 +2356,11 @@ export function App() {
                 <span className="results-eyebrow">Round complete</span>
                 <h1>{accuracy}% accuracy</h1>
                 <p className="score-display">
-                  <strong>{cappedTotalScore}</strong>
+                  <strong>{totalScore}</strong>
                   <span> of {maxScore} points</span>
+                  {comboBonus > 0 && (
+                    <span className="combo-bonus-line"> +{comboBonus} combo bonus</span>
+                  )}
                 </p>
               </header>
 
@@ -2145,7 +2413,13 @@ export function App() {
                 </div>
 
                 {hasSubmitted && !qualifiesForHighScore && (
-                  <p className="leaderboard-message">Score saved. Nice round.</p>
+                  <p className="leaderboard-message">
+                    {submitOfflineNotice || "Score saved. Nice round."}
+                  </p>
+                )}
+
+                {leaderboardOffline && leaderboard.length > 0 && (
+                  <p className="leaderboard-offline-note">Showing cached scores — you appear to be offline.</p>
                 )}
 
                 <div className="leaderboard-list">
@@ -2231,6 +2505,28 @@ export function App() {
             </div>
           </div>
         </section>
+      )}
+
+      {showFieldGuide && (
+        <div className="field-guide-overlay" role="dialog" aria-modal="true" aria-label="Raptor field guide">
+          <div className="field-guide-modal">
+            <div className="field-guide-header">
+              <h2>Raptor Field Guide</h2>
+              <button className="field-guide-close" type="button" onClick={() => setShowFieldGuide(false)} aria-label="Close field guide">
+                <X aria-hidden="true" />
+              </button>
+            </div>
+            <div className="field-guide-grid">
+              {UNIQUE_RAPTORS.map((raptor) => (
+                <article className="field-guide-card" key={raptor.id} style={{ "--raptor-color": raptor.tint } as React.CSSProperties}>
+                  <img src={raptor.profile} alt={raptor.name} loading="lazy" />
+                  <strong>{raptor.name}</strong>
+                  <p>{raptor.fact}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
