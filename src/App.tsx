@@ -20,6 +20,7 @@ import { Odometer } from "./Odometer";
 import {
   computeAccuracy,
   computeMaxScore,
+  computeNextComboStreak,
   computeScorePerSpecies,
   computeTotalDelta,
   computeTotalScore,
@@ -202,8 +203,6 @@ function dedupeHighScores(scores: HighScore[]) {
   return Array.from(uniqueScores.values()).slice(0, LEADERBOARD_SIZE);
 }
 
-const PENDING_SCORES_KEY = "kestrel.pendingScores";
-
 function leaderboardCacheKey(level: Difficulty) {
   return `kestrel.leaderboard.${level}`;
 }
@@ -228,44 +227,11 @@ function persistCachedLeaderboard(level: Difficulty, scores: HighScore[]) {
   }
 }
 
-type PendingHighScore = {
-  payload: Record<string, unknown>;
-  mode: "insert" | "update";
-  targetId?: string | number;
-};
-
-function loadPendingHighScores(): PendingHighScore[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(PENDING_SCORES_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) ? (parsed as PendingHighScore[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function pushPendingHighScore(entry: PendingHighScore) {
-  if (typeof window === "undefined") return;
-  try {
-    const current = loadPendingHighScores();
-    current.push(entry);
-    window.localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(current));
-  } catch {
-    // ignore
-  }
-}
-
-function removePendingHighScore(index: number) {
-  if (typeof window === "undefined") return;
-  try {
-    const current = loadPendingHighScores();
-    const next = current.filter((_, i) => i !== index);
-    window.localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(next));
-  } catch {
-    // ignore
-  }
-}
+import {
+  loadPendingHighScores,
+  pushPendingHighScore,
+  removePendingHighScore,
+} from "./offlineQueue";
 
 function framesFromBounds(bounds: Array<[number, number, number, number]>, width: number, height: number, padding = 16): Frame[] {
   const cellW = width / 3;
@@ -575,6 +541,9 @@ export const RAPTORS: Raptor[] = [
 const UNIQUE_RAPTORS = RAPTORS.filter(
   (raptor, index, arr) => arr.findIndex((r) => r.id === raptor.id) === index
 );
+
+const RAPTOR_BY_KEY = new Map(RAPTORS.map((raptor) => [raptor.key, raptor]));
+const RAPTOR_BY_ID = new Map(UNIQUE_RAPTORS.map((raptor) => [raptor.id, raptor]));
 
 const TUTORIAL_RAPTORS = UNIQUE_RAPTORS.filter(
   (raptor) => raptor.id === "americanKestrel" || raptor.id === "redTailedHawk" || raptor.id === "turkeyVulture"
@@ -931,6 +900,8 @@ export function App() {
   const animationRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
   const phaseRef = useRef<Phase>("intro");
+  const hiddenAtRef = useRef(0);
+  const tickRef = useRef<((timestamp: number) => void) | null>(null);
 
   const totalActual = useMemo(
     () => RAPTOR_IDS.reduce((sum, id) => sum + actualCounts[id], 0),
@@ -1307,7 +1278,7 @@ export function App() {
           0.32,
         );
         
-        const raptorConfig = RAPTORS.find((r) => r.key === bird.raptorKey);
+        const raptorConfig = RAPTOR_BY_KEY.get(bird.raptorKey);
         const speciesScale = raptorConfig?.sizeScale ?? 1;
         const scale = lerp(bird.farScale, bird.nearScale, Math.pow(Math.sin(Math.PI * progress), 1.12)) * speciesScale;
         const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
@@ -1357,7 +1328,7 @@ export function App() {
       const sprite = images[bird.raptorKey];
       if (!sprite.ready || sprite.width === 0) continue;
 
-      const raptorConfig = RAPTORS.find((r) => r.key === bird.raptorKey);
+      const raptorConfig = RAPTOR_BY_KEY.get(bird.raptorKey);
       if (!raptorConfig) continue;
 
       const frames = raptorConfig.frames;
@@ -1423,11 +1394,39 @@ export function App() {
       animationRef.current = window.requestAnimationFrame(tick);
     };
 
+    tickRef.current = tick;
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (!pausedRef.current) {
+          hiddenAtRef.current = performance.now();
+          if (animationRef.current) {
+            window.cancelAnimationFrame(animationRef.current);
+            animationRef.current = null;
+          }
+        }
+      } else if (hiddenAtRef.current > 0) {
+        const hiddenDuration = performance.now() - hiddenAtRef.current;
+        hiddenAtRef.current = 0;
+        if (startTimeRef.current > 0) startTimeRef.current += hiddenDuration;
+        nextSpawnRef.current += hiddenDuration;
+        nextThermalSpawnRef.current += hiddenDuration;
+        lastBeepSecondRef.current = 0;
+        if (tickRef.current && animationRef.current === null) {
+          animationRef.current = window.requestAnimationFrame(tickRef.current);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
     animationRef.current = window.requestAnimationFrame(tick);
 
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
       if (animationRef.current) window.cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
+      tickRef.current = null;
     };
   }, [drawScene, phase]);
 
@@ -1440,18 +1439,6 @@ export function App() {
 
     return () => window.clearTimeout(fallback);
   }, [phase]);
-
-  useEffect(() => {
-    const pauseWhenHidden = () => {
-      if (document.hidden && animationRef.current) {
-        window.cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-    };
-
-    document.addEventListener("visibilitychange", pauseWhenHidden);
-    return () => document.removeEventListener("visibilitychange", pauseWhenHidden);
-  }, []);
 
   useEffect(() => {
     const audio = gameMusicRef.current;
@@ -1638,8 +1625,8 @@ export function App() {
     lastFrameRef.current = 0;
 
     const spawnTutorialBird = (raptorId: RaptorId, viewWidth: number, viewHeight: number, timestamp: number) => {
-      const raptor = RAPTORS.find((r) => r.id === raptorId && r.key !== "northernHarrierMale");
-      if (!raptor) return;
+      const raptor = RAPTOR_BY_ID.get(raptorId);
+      if (!raptor || raptor.key === "northernHarrierMale") return;
       const behavior = SPECIES_BEHAVIOR[raptor.id];
       const isHover = raptor.id === "americanKestrel";
       const bird: Bird = {
@@ -1703,13 +1690,36 @@ export function App() {
       animationRef.current = window.requestAnimationFrame(tick);
     };
 
+    tickRef.current = tick;
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        hiddenAtRef.current = performance.now();
+        if (animationRef.current) {
+          window.cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
+      } else if (hiddenAtRef.current > 0) {
+        const hiddenDuration = performance.now() - hiddenAtRef.current;
+        hiddenAtRef.current = 0;
+        if (startTimeRef.current > 0) startTimeRef.current += hiddenDuration;
+        if (tickRef.current && animationRef.current === null) {
+          animationRef.current = window.requestAnimationFrame(tickRef.current);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
     animationRef.current = window.requestAnimationFrame(tick);
 
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
       if (animationRef.current) {
         window.cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
+      tickRef.current = null;
       birdsRef.current = [];
       thermalBirdsRef.current = [];
     };
@@ -1959,11 +1969,13 @@ export function App() {
     };
     setPlayerCounts(playerCountsRef.current);
 
-    const raptorName = UNIQUE_RAPTORS.find((r) => r.id === raptorId)?.shortName ?? raptorId;
+    const raptorName = RAPTOR_BY_ID.get(raptorId)?.shortName ?? raptorId;
     const actual = actualCountsRef.current[raptorId];
-    const delta = playerCountsRef.current[raptorId] - actual;
-    const onTarget = Math.abs(delta) <= 1;
-    const newStreak = onTarget ? comboStreakRef.current + 1 : 0;
+    const newStreak = computeNextComboStreak(
+      comboStreakRef.current,
+      playerCountsRef.current[raptorId],
+      actual,
+    );
     comboStreakRef.current = newStreak;
     setComboStreak(newStreak);
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "kestrels-game-v5";
+const CACHE_NAME = "kestrels-game-v6";
 const CORE_ASSETS = ["./", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {

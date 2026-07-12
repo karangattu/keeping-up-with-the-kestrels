@@ -47,6 +47,15 @@ export function getComboReward(comboStreak: number): number {
   return multiplier > 1 ? (multiplier - 1) * COMBO_BASE : 0;
 }
 
+export function computeNextComboStreak(
+  currentStreak: number,
+  playerCount: number,
+  actualCount: number,
+): number {
+  const onTarget = Math.abs(playerCount - actualCount) <= 1;
+  return onTarget ? currentStreak + 1 : 0;
+}
+
 export function getFinalCountdownBeep(
   secondsLeft: number,
 ): { frequency: number; durationMs: number; peakGain: number } | null {

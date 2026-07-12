@@ -4,6 +4,7 @@ import {
   computeAccuracy,
   computeCappedTotalScore,
   computeMaxScore,
+  computeNextComboStreak,
   computeScorePerSpecies,
   computeTotalDelta,
   computeTotalScore,
@@ -100,6 +101,29 @@ describe("getComboReward", () => {
   test("a broken streak (0) yields no reward", () => {
     expect(getComboReward(0)).toBe(0);
     expect(getComboReward(-1)).toBe(0);
+  });
+});
+
+describe("computeNextComboStreak", () => {
+  test("advances the streak when the tap is exactly on target", () => {
+    expect(computeNextComboStreak(0, 3, 3)).toBe(1);
+    expect(computeNextComboStreak(4, 3, 3)).toBe(5);
+  });
+
+  test("advances the streak when the tap is within +-1 of actual", () => {
+    expect(computeNextComboStreak(2, 4, 3)).toBe(3);
+    expect(computeNextComboStreak(2, 2, 3)).toBe(3);
+  });
+
+  test("resets the streak to 0 when the tap is off by 2 or more", () => {
+    expect(computeNextComboStreak(5, 5, 3)).toBe(0);
+    expect(computeNextComboStreak(5, 0, 3)).toBe(0);
+  });
+
+  test("handles over- and under-counting symmetrically", () => {
+    expect(computeNextComboStreak(1, 4, 5)).toBe(2);
+    expect(computeNextComboStreak(1, 6, 5)).toBe(2);
+    expect(computeNextComboStreak(1, 7, 5)).toBe(0);
   });
 });
 
