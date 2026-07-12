@@ -378,6 +378,47 @@ button {
   }
 }
 
+.odometer {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  line-height: 1;
+}
+
+.odometer-digit {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+.odometer-strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+
+.odometer-cell {
+  display: block;
+  height: 1em;
+  line-height: 1;
+  text-align: center;
+}
+
+.odometer-static {
+  display: inline-block;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .odometer-strip {
+    transition: none;
+  }
+}
+
 .tap-panel {
   position: absolute;
   right: max(16px, env(safe-area-inset-right));
@@ -649,6 +690,22 @@ button {
   font-size: 2.2rem;
   font-weight: 900;
   letter-spacing: 0;
+}
+
+.score-breakdown {
+  margin: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  color: #bedbd3;
+  font-size: 0.88rem;
+  letter-spacing: 0.02em;
+}
+
+.score-breakdown .combo-bonus-line {
+  font-weight: 800;
 }
 
 .results-actions {

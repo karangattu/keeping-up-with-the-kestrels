@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { Odometer } from "./Odometer";
 import {
   computeAccuracy,
   computeMaxScore,
@@ -953,10 +954,9 @@ export function App() {
     [actualCounts, playerCounts, difficulty],
   );
 
-  const totalScore = useMemo(
-    () => computeTotalScore(scorePerSpecies) + comboBonus,
-    [scorePerSpecies, comboBonus],
-  );
+  const accuracyScore = useMemo(() => computeTotalScore(scorePerSpecies), [scorePerSpecies]);
+
+  const totalScore = useMemo(() => accuracyScore + comboBonus, [accuracyScore, comboBonus]);
 
   const maxScore = useMemo(() => computeMaxScore(actualCounts, difficulty), [actualCounts, difficulty]);
 
@@ -2257,7 +2257,7 @@ export function App() {
           <header className="hud">
             <div className={timeLeft <= LAST_SECONDS_WARNING ? "hud-item hud-timer warning" : "hud-item hud-timer"}>
               <Clock3 aria-hidden="true" />
-              <span>{formatTime(timeLeft)}</span>
+              <Odometer value={formatTime(timeLeft)} />
             </div>
             <div className="hud-item">
               <Target aria-hidden="true" />
@@ -2357,11 +2357,18 @@ export function App() {
                 <h1>{accuracy}% accuracy</h1>
                 <p className="score-display">
                   <strong>{totalScore}</strong>
-                  <span> of {maxScore} points</span>
-                  {comboBonus > 0 && (
-                    <span className="combo-bonus-line"> +{comboBonus} combo bonus</span>
+                  {comboBonus === 0 ? (
+                    <span> of {maxScore} points</span>
+                  ) : (
+                    <span> points</span>
                   )}
                 </p>
+                {comboBonus > 0 && (
+                  <p className="score-breakdown">
+                    <span>{accuracyScore} of {maxScore} accuracy</span>
+                    <span className="combo-bonus-line"> +{comboBonus} combo bonus</span>
+                  </p>
+                )}
               </header>
 
               <div className="results-stats">
