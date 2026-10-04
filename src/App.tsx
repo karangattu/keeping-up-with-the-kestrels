@@ -1766,8 +1766,21 @@ export function App() {
         // Qualification can't be validated offline — hide the submit form.
         setQualifiesForHighScore(false);
       } else {
-        setLeaderboardOffline(false);
-        setLeaderboardError("Could not load high scores. Check the Supabase table and RLS policies.");
+        // Being offline is an expected state, not a fault, so it deserves its
+        // own message. navigator.onLine is unreliable inside an Android WebView
+        // (it stays true in airplane mode), so lean on the error shape instead:
+        // postgrest-js reports a network failure as status 0 with a
+        // "Failed to fetch" message and no Postgres error code, whereas a real
+        // server/RLS fault carries a SQLSTATE code.
+        const looksOffline = !error.code && /failed to fetch|networkerror|load failed/i.test(error.message);
+        const offline = looksOffline || (typeof navigator !== "undefined" && navigator.onLine === false);
+        console.warn("Leaderboard fetch failed:", error.message, error.code);
+        setLeaderboardOffline(offline);
+        setLeaderboardError(
+          offline
+            ? "You're offline — high scores will load when you reconnect."
+            : "Couldn't load high scores right now. Please try again later.",
+        );
       }
       return;
     }
