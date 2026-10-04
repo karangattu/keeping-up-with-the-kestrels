@@ -30,16 +30,13 @@ version name, and drives its version code.
 To install on a tablet: download the APK, copy it to the device, and open it. Android will ask you
 to allow "install unknown apps" for your file manager the first time.
 
-> **Signing.** By default the APK is signed with a throwaway debug keystore, which means a new
-> build cannot upgrade an older one — you must uninstall the previous build first. To make upgrades
-> work, add these repository secrets so every build shares one keystore:
+> **Signing.** This project signs every build — CI and local — with one shared debug
+> keystore (`~/.kestrels-android/kestrels-debug.keystore`), wired up through the
+> `ANDROID_DEBUG_KEYSTORE_*` repository secrets. That is what lets a new APK install over an
+> older one instead of failing with a signature mismatch.
 >
-> | Secret | Value |
-> | --- | --- |
-> | `ANDROID_DEBUG_KEYSTORE_BASE64` | `base64 -i debug.keystore` output of your keystore |
-> | `ANDROID_DEBUG_KEY_ALIAS` | keystore alias |
-> | `ANDROID_DEBUG_KEY_PASSWORD` | key password |
-> | `ANDROID_DEBUG_STORE_PASSWORD` | store password |
+> To rotate the keystore, generate a new one and re-set all four secrets. Anyone who already
+> installed an APK signed by the old key will have to uninstall first.
 >
 > For distribution through the Play Store, swap in a proper release keystore and emit an `.aab`
 > instead (see `android/app/build.gradle`).
@@ -50,9 +47,13 @@ Requires Node 22, JDK 21, and the Android SDK.
 
 ```bash
 npm install
-npm run android:apk       # builds dist-android/app-debug.apk via android/
+npm run android:apk       # builds android/app/build/outputs/apk/debug/app-debug.apk
 npm run android:open      # opens the project in Android Studio
 ```
+
+Local builds sign with the shared keystore via `kestrelsDebug*` entries in
+`~/.gradle/gradle.properties`, so they match CI. The default version name/code is `1.0`/`1`;
+override with `./android/gradlew -p android assembleDebug -PkestrelsVersionName=0.3.1 -PkestrelsVersionCode=3001`.
 
 Other useful scripts:
 
