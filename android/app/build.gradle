@@ -20,15 +20,24 @@ android {
     signingConfigs {
         debug {
             // Each CI machine otherwise generates its own debug keystore, so a new
-            // tagged build cannot install over the previous one. If
-            // ANDROID_DEBUG_KEYSTORE points at a keystore file (fed by the
-            // optional ANDROID_DEBUG_KEYSTORE_BASE64 secret in the release
-            // workflow) we sign with that instead and upgrades keep working.
-            if (System.getenv('ANDROID_DEBUG_KEYSTORE')) {
-                storeFile file(System.getenv('ANDROID_DEBUG_KEYSTORE'))
+            // tagged build cannot install over the previous one. To keep one
+            // signing identity across every build:
+            //
+            //   CI     - ANDROID_DEBUG_KEYSTORE, fed by the
+            //            ANDROID_DEBUG_KEYSTORE_BASE64 release secret.
+            //   local  - kestrelsDebug* properties in ~/.gradle/gradle.properties.
+            //
+            // With neither set we fall back to the standard local debug keystore.
+            def keystorePath = System.getenv('ANDROID_DEBUG_KEYSTORE')
+                    ?: project.findProperty('kestrelsDebugKeystore')
+            if (keystorePath) {
+                storeFile file(keystorePath)
                 storePassword System.getenv('ANDROID_DEBUG_STORE_PASSWORD')
+                        ?: project.findProperty('kestrelsDebugStorePassword')
                 keyAlias System.getenv('ANDROID_DEBUG_KEY_ALIAS')
+                        ?: project.findProperty('kestrelsDebugKeyAlias')
                 keyPassword System.getenv('ANDROID_DEBUG_KEY_PASSWORD')
+                        ?: project.findProperty('kestrelsDebugKeyPassword')
             }
         }
     }

@@ -17,8 +17,21 @@ public class MainActivity extends BridgeActivity {
 
         // The game draws edge-to-edge; keep the tablet awake for the whole round.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        applyImmersiveMode();
+    }
 
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // Android restores the system bars after dialogs and rotation, so the
+        // hidden state has to be re-applied every time we regain focus.
+        if (hasFocus) {
+            applyImmersiveMode();
+        }
+    }
+
+    private void applyImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         WindowInsetsControllerCompat controller =
                 WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.hide(WindowInsetsCompat.Type.systemBars());
