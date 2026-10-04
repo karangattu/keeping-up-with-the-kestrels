@@ -88,7 +88,16 @@ jobs:
         run: |
           set -euo pipefail
           keystore="$RUNNER_TEMP/kestrels-debug.keystore"
-          printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          encoded="$(printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | tr -d '[:space:]')"
+          if ! printf '%s' "$encoded" | base64 --decode > "$keystore" 2>/dev/null; then
+            echo "::error::ANDROID_DEBUG_KEYSTORE_BASE64 is not valid base64 (got ${#encoded} chars). Re-set it from 'base64 -i kestrels-debug.keystore'."
+            exit 1
+          fi
+          if [ ! -s "$keystore" ]; then
+            echo "::error::ANDROID_DEBUG_KEYSTORE_BASE64 decoded to an empty file."
+            exit 1
+          fi
+          echo "Restored $(wc -c < "$keystore") byte keystore."
           echo "ANDROID_DEBUG_KEYSTORE=$keystore" >> "$GITHUB_ENV"
 
       - name: Assemble APK
