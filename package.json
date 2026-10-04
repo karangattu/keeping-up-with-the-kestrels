@@ -9,9 +9,16 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && ./android/gradlew -p android assembleDebug",
+    "android:open": "cap open android",
+    "android:assets": "bash scripts/generate-android-assets.sh"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@supabase/supabase-js": "^2.108.1",
     "@vitejs/plugin-react": "^6.0.2",
     "lucide-react": "^0.468.0",
