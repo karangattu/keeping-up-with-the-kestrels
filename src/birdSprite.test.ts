@@ -32,3 +32,12 @@ describe("overlapping bird sprite crops", () => {
     });
   }
 });
+
+// Pose 8's forward-reaching wingtip is farther right than the beak. Anchoring
+// that feather used to move the whole bird sideways for one frame per cycle.
+it("keeps the turkey vulture's beak on the flight path in pose 8", () => {
+  const frame = frames["turkey-vulture"][8];
+  const sourceBeak = { x: 316, y: 818 };
+  expect(sourceBeak.x - frame.sx - frame.anchorX).toBe(0);
+  expect(sourceBeak.y - frame.sy - frame.anchorY).toBe(0);
+});

@@ -35,6 +35,7 @@ BEAK_OVERRIDES = {
     'red-shouldered-hawk': {0: (254, 236), 1: (582, 236), 8: (254, 811), 15: (1202, 1121)},
     'red-tailed-hawk': {0: (280, 235), 1: (598, 235), 8: (281, 798), 9: (631, 788)},
     'white-tailed-kite': {0: (292, 235), 8: (292, 811)},
+    'turkey-vulture': {8: (316, 818)},
 }
 frames_by_species = json.loads(metadata.read_text()) if metadata.exists() else {}
 paths = [Path(arg) for arg in sys.argv[1:]] or sorted((ROOT / 'assets').glob('*-sprite-sheet.png'))
