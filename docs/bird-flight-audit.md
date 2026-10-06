@@ -13,7 +13,10 @@ built-in image-generation tool. The exact prompts are in `bird-flight-prompts.js
 
 Each bird now has a 16-slot complete wingbeat. Crop and beak-anchor metadata in
 `src/birdSpriteFrames.json` prevents changing wing bounds from shifting the body.
-Frames use a shared logical scale, independent of PNG export resolution. Raised
+Frames use a shared logical scale, independent of PNG export resolution.
+Golden eagle and turkey vulture frames also use per-pose silhouette clips to
+exclude neighboring birds inside overlapping rectangular crops. The shared
+renderer caches those paths for both the game and the review page. Raised
 poses accidentally exported in the male harrier and red-tailed hawk recovery are
 replaced in playback by reversing the appropriate downstroke intermediates.
 

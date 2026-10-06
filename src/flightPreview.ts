@@ -1,3 +1,4 @@
+import { drawBirdSprite } from "./birdSprite";
 import { RAPTORS } from "./App";
 import { FLIGHT_CELL_SIZE, getFlightFrameIndex } from "./flightAnimation";
 
@@ -47,7 +48,8 @@ function draw(timestamp: number) {
     const x = (index % columns + 0.5) * cellWidth;
     const y = Math.floor(index / columns) * cellHeight;
     const frameIndex = getFlightFrameIndex({ raptorId: raptor.id, flightStyle: "hover", duration: 1, phase: 0, flapCenters: [] }, elapsed);
-    const { sx, sy, sw, sh, anchorX, anchorY, exclude } = raptor.frames[frameIndex];
+    const frame = raptor.frames[frameIndex];
+    const { anchorX, anchorY } = frame;
     const image = images[index];
     const scale = Math.min(0.28, cellWidth / 700);
     const pixelScale = FLIGHT_CELL_SIZE / (image.width / 4) * scale;
@@ -56,14 +58,7 @@ function draw(timestamp: number) {
     ctx.scale(direction, 1);
     const drawX = FLIGHT_CELL_SIZE * scale * 0.4 - anchorX * pixelScale;
     const drawY = -FLIGHT_CELL_SIZE * scale * 0.04 - anchorY * pixelScale;
-    if (exclude) {
-      const crop = new Path2D();
-      crop.rect(drawX, drawY, sw * pixelScale, sh * pixelScale);
-      crop.rect(drawX + exclude.x * pixelScale, drawY + exclude.y * pixelScale,
-        exclude.width * pixelScale, exclude.height * pixelScale);
-      ctx.clip(crop, "evenodd");
-    }
-    ctx.drawImage(image, sx, sy, sw, sh, drawX, drawY, sw * pixelScale, sh * pixelScale);
+    drawBirdSprite(ctx, image, frame, pixelScale, drawX, drawY);
     ctx.restore();
     ctx.fillStyle = "#153b3c";
     ctx.font = "14px system-ui";

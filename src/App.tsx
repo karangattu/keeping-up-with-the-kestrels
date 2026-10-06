@@ -102,7 +102,7 @@ import { FLIGHT_CELL_SIZE, FLIGHT_SHEET_COLUMNS, getFlightFrameIndex } from "./f
 
 import spriteFrames from "./birdSpriteFrames.json";
 
-type SpriteFrame = { sx: number; sy: number; sw: number; sh: number; anchorX: number; anchorY: number; exclude?: { x: number; y: number; width: number; height: number } };
+import { drawBirdSprite, type SpriteFrame } from "./birdSprite";
 
 export type Raptor = {
   key: string;
@@ -1140,10 +1140,9 @@ export function App() {
       if (!raptorConfig) continue;
 
       const frameIndex = getFlightFrameIndex(bird, progress);
-      const { sx, sy, sw, sh, anchorX, anchorY, exclude } = raptorConfig.frames[frameIndex];
+      const frame = raptorConfig.frames[frameIndex];
+      const { anchorX, anchorY } = frame;
       const pixelScale = FLIGHT_CELL_SIZE / (sprite.width / FLIGHT_SHEET_COLUMNS) * scale;
-      const drawWidth = sw * pixelScale;
-      const drawHeight = sh * pixelScale;
       // Lock the beak/body to the flight path, independently of moving wing bounds.
       const drawX = FLIGHT_CELL_SIZE * scale * 0.4 - anchorX * pixelScale;
       const drawY = -FLIGHT_CELL_SIZE * scale * 0.04 - anchorY * pixelScale;
@@ -1156,14 +1155,7 @@ export function App() {
       ctx.shadowColor = "rgba(16, 42, 47, 0.18)";
       ctx.shadowBlur = 6 + scale * 10;
       ctx.shadowOffsetY = 3 + scale * 8;
-      if (exclude) {
-        const crop = new Path2D();
-        crop.rect(drawX, drawY, drawWidth, drawHeight);
-        crop.rect(drawX + exclude.x * pixelScale, drawY + exclude.y * pixelScale,
-          exclude.width * pixelScale, exclude.height * pixelScale);
-        ctx.clip(crop, "evenodd");
-      }
-      ctx.drawImage(sprite.image, sx, sy, sw, sh, drawX, drawY, drawWidth, drawHeight);
+      drawBirdSprite(ctx, sprite.image, frame, pixelScale, drawX, drawY);
       ctx.restore();
     }
   }, [difficulty, spawnBird]);
