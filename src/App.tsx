@@ -98,7 +98,11 @@ type ThermalRaptorId =
   | "turkeyVulture"
   | "baldEagle";
 
-type Frame = { sx: number; sy: number; sw: number; sh: number };
+import { FLIGHT_CELL_SIZE, FLIGHT_SHEET_COLUMNS, getFlightFrameIndex } from "./flightAnimation";
+
+import spriteFrames from "./birdSpriteFrames.json";
+
+type SpriteFrame = { sx: number; sy: number; sw: number; sh: number; anchorX: number; anchorY: number; exclude?: { x: number; y: number; width: number; height: number } };
 
 export type Raptor = {
   key: string;
@@ -106,8 +110,8 @@ export type Raptor = {
   name: string;
   shortName: string;
   sheet: string;
+  frames: SpriteFrame[];
   tint: string;
-  frames: Frame[];
   sizeScale: number;
   profile: string;
   fact: string;
@@ -233,176 +237,6 @@ import {
   removePendingHighScore,
 } from "./offlineQueue";
 
-function framesFromBounds(bounds: Array<[number, number, number, number]>, width: number, height: number, padding = 16): Frame[] {
-  const cellW = width / 3;
-  const cellH = height / 2;
-
-  return bounds.map(([minX, minY, maxX, maxY], index) => {
-    const col = index % 3;
-    const row = Math.floor(index / 3);
-
-    const cellLeft = col * cellW;
-    const cellRight = cellLeft + cellW;
-    const cellTop = row * cellH;
-    const cellBottom = cellTop + cellH;
-
-    const sx = Math.max(cellLeft, minX - padding);
-    const sy = Math.max(cellTop, minY - padding);
-    const right = Math.min(cellRight, maxX + padding + 1);
-    const bottom = Math.min(cellBottom, maxY + padding + 1);
-
-    return {
-      sx,
-      sy,
-      sw: Math.max(0, right - sx),
-      sh: Math.max(0, bottom - sy),
-    };
-  });
-}
-
-const COOPERS_HAWK_FRAMES = framesFromBounds(
-  [
-    [59, 305, 555, 388],
-    [633, 121, 1072, 372],
-    [1177, 26, 1595, 385],
-    [52, 554, 498, 780],
-    [612, 573, 1057, 848],
-    [1150, 587, 1582, 889],
-  ],
-  1672,
-  941,
-);
-
-const AMERICAN_KESTREL_FRAMES = framesFromBounds(
-  [
-    [38, 234, 600, 360],
-    [644, 48, 1063, 334],
-    [1175, 29, 1599, 339],
-    [53, 561, 487, 784],
-    [624, 570, 1032, 853],
-    [1145, 572, 1562, 893],
-  ],
-  1672,
-  941,
-);
-
-const GOLDEN_EAGLE_FRAMES = framesFromBounds(
-  [
-    [22, 266, 612, 416],
-    [681, 96, 1066, 414],
-    [1229, 37, 1581, 413],
-    [110, 552, 494, 811],
-    [649, 557, 1053, 847],
-    [1204, 574, 1580, 828],
-  ],
-  1672,
-  941,
-);
-
-const NORTHERN_HARRIER_FRAMES = framesFromBounds(
-  [
-    [43, 329, 654, 455],
-    [730, 83, 1173, 452],
-    [1330, 33, 1786, 471],
-    [69, 663, 542, 970],
-    [710, 666, 1172, 937],
-    [1316, 684, 1797, 797],
-  ],
-  1920,
-  1080,
-);
-
-const NORTHERN_HARRIER_MALE_FRAMES = framesFromBounds(
-  [
-    [47, 307, 598, 404],
-    [705, 125, 1213, 385],
-    [1340, 47, 1816, 400],
-    [72, 555, 567, 914],
-    [710, 673, 1192, 924],
-    [1335, 754, 1838, 896],
-  ],
-  1920,
-  1080,
-);
-
-const RED_SHOULDERED_HAWK_FRAMES = framesFromBounds(
-  [
-    [24, 251, 601, 398],
-    [677, 99, 1093, 401],
-    [1222, 39, 1558, 400],
-    [127, 580, 496, 811],
-    [674, 588, 1040, 838],
-    [1202, 599, 1552, 819],
-  ],
-  1672,
-  941,
-);
-
-const RED_TAILED_HAWK_FRAMES = framesFromBounds(
-  [
-    [40, 258, 590, 386],
-    [658, 159, 1093, 383],
-    [1210, 79, 1551, 399],
-    [163, 508, 509, 750],
-    [687, 604, 1049, 806],
-    [1206, 617, 1571, 834],
-  ],
-  1672,
-  941,
-);
-
-const TURKEY_VULTURE_FRAMES = framesFromBounds(
-  [
-    [36, 274, 640, 434],
-    [757, 140, 1280, 430],
-    [1396, 66, 1770, 445],
-    [176, 565, 554, 858],
-    [785, 688, 1188, 953],
-    [1391, 696, 1784, 964],
-  ],
-  1920,
-  1080,
-);
-
-const BALD_EAGLE_FRAMES = framesFromBounds(
-  [
-    [61, 295, 625, 445],
-    [722, 145, 1226, 453],
-    [1348, 35, 1776, 476],
-    [108, 617, 610, 907],
-    [731, 618, 1213, 990],
-    [1333, 632, 1816, 1011],
-  ],
-  1920,
-  1080,
-);
-
-const OSPREY_FRAMES = framesFromBounds(
-  [
-    [55, 321, 590, 478],
-    [721, 133, 1218, 494],
-    [1347, 37, 1767, 509],
-    [105, 616, 592, 927],
-    [730, 633, 1199, 1014],
-    [1335, 650, 1802, 1012],
-  ],
-  1920,
-  1080,
-);
-
-const WHITE_TAILED_KITE_FRAMES = framesFromBounds(
-  [
-    [48, 344, 646, 474],
-    [741, 111, 1158, 460],
-    [1341, 42, 1741, 483],
-    [91, 669, 578, 976],
-    [751, 676, 1203, 996],
-    [1334, 711, 1821, 847],
-  ],
-  1920,
-  1080,
-);
-
 export const RAPTORS: Raptor[] = [
   {
     key: "americanKestrel",
@@ -410,8 +244,8 @@ export const RAPTORS: Raptor[] = [
     name: "American Kestrel",
     shortName: "American Kestrel",
     sheet: americanKestrelSheet,
+    frames: spriteFrames["american-kestrel"],
     tint: "#e8a84c",
-    frames: AMERICAN_KESTREL_FRAMES,
     sizeScale: 0.47,
     profile: americanKestrelProfile,
     fact: "Small falcon; hovers while hunting on open fields.",
@@ -422,8 +256,8 @@ export const RAPTORS: Raptor[] = [
     name: "Cooper's Hawk",
     shortName: "Cooper's Hawk",
     sheet: coopersHawkSheet,
+    frames: spriteFrames["coopers-hawk"],
     tint: "#8ca6a9",
-    frames: COOPERS_HAWK_FRAMES,
     sizeScale: 0.62,
     profile: coopersHawkProfile,
     fact: "Medium accipiter; banded tail, hunts birds in backyards.",
@@ -434,8 +268,8 @@ export const RAPTORS: Raptor[] = [
     name: "Golden Eagle",
     shortName: "Golden Eagle",
     sheet: goldenEagleSheet,
+    frames: spriteFrames["golden-eagle"],
     tint: "#6b5c43",
-    frames: GOLDEN_EAGLE_FRAMES,
     sizeScale: 1.42,
     profile: goldenEagleProfile,
     fact: "Huge eagle; soaring flight, golden-brown wash on nape.",
@@ -446,8 +280,8 @@ export const RAPTORS: Raptor[] = [
     name: "Northern Harrier",
     shortName: "Northern Harrier",
     sheet: northernHarrierSheet,
+    frames: spriteFrames["northern-harrier"],
     tint: "#ab8660",
-    frames: NORTHERN_HARRIER_FRAMES,
     sizeScale: 0.89,
     profile: northernHarrierProfile,
     fact: "Low-flying raptor; white rump, owl-like facial disk.",
@@ -458,8 +292,8 @@ export const RAPTORS: Raptor[] = [
     name: "Northern Harrier (Male)",
     shortName: "Northern Harrier",
     sheet: northernHarrierMaleSheet,
+    frames: spriteFrames["northern-harrier-male"],
     tint: "#8a9ba8",
-    frames: NORTHERN_HARRIER_MALE_FRAMES,
     sizeScale: 0.86,
     profile: northernHarrierProfile,
     fact: "Low-flying raptor; white rump, owl-like facial disk.",
@@ -470,8 +304,8 @@ export const RAPTORS: Raptor[] = [
     name: "Red-shouldered Hawk",
     shortName: "Red-shouldered Hawk",
     sheet: redShoulderedHawkSheet,
+    frames: spriteFrames["red-shouldered-hawk"],
     tint: "#c35a32",
-    frames: RED_SHOULDERED_HAWK_FRAMES,
     sizeScale: 0.78,
     profile: redShoulderedHawkProfile,
     fact: "Medium hawk; reddish chest, translucent wing crescents.",
@@ -482,8 +316,8 @@ export const RAPTORS: Raptor[] = [
     name: "Red-tailed Hawk",
     shortName: "Red-tailed Hawk",
     sheet: redTailedHawkSheet,
+    frames: spriteFrames["red-tailed-hawk"],
     tint: "#d68538",
-    frames: RED_TAILED_HAWK_FRAMES,
     sizeScale: 1,
     profile: redTailedHawkProfile,
     fact: "Large hawk; dark belly band, rufous tail in adults.",
@@ -494,8 +328,8 @@ export const RAPTORS: Raptor[] = [
     name: "Turkey Vulture",
     shortName: "Turkey Vulture",
     sheet: turkeyVultureSheet,
+    frames: spriteFrames["turkey-vulture"],
     tint: "#7b5547",
-    frames: TURKEY_VULTURE_FRAMES,
     sizeScale: 1.42,
     profile: turkeyVultureProfile,
     fact: "Large scavenger; dihedral wings, rocks side-to-side.",
@@ -506,8 +340,8 @@ export const RAPTORS: Raptor[] = [
     name: "Bald Eagle",
     shortName: "Bald Eagle",
     sheet: baldEagleSheet,
+    frames: spriteFrames["bald-eagle"],
     tint: "#4a3728",
-    frames: BALD_EAGLE_FRAMES,
     sizeScale: 1.66,
     profile: baldEagleProfile,
     fact: "Huge eagle; white head and tail, wings flat when soaring.",
@@ -518,8 +352,8 @@ export const RAPTORS: Raptor[] = [
     name: "White-tailed Kite",
     shortName: "White-tailed Kite",
     sheet: whiteTailedKiteSheet,
+    frames: spriteFrames["white-tailed-kite"],
     tint: "#c4b8a8",
-    frames: WHITE_TAILED_KITE_FRAMES,
     sizeScale: 0.85,
     profile: whiteTailedKiteProfile,
     fact: "Graceful raptor; white body, black shoulders, hovers.",
@@ -530,8 +364,8 @@ export const RAPTORS: Raptor[] = [
     name: "Osprey",
     shortName: "Osprey",
     sheet: ospreySheet,
+    frames: spriteFrames["osprey"],
     tint: "#5c4a3a",
-    frames: OSPREY_FRAMES,
     sizeScale: 1.35,
     profile: ospreyProfile,
     fact: "Fish specialist; dark eye stripe, arched wings.",
@@ -718,32 +552,6 @@ function generateFlapCenters(bird: Bird, speciesBehavior: typeof SPECIES_BEHAVIO
   }
 
   return centers;
-}
-
-function getFlightFrameIndex(bird: Bird, frameCount: number, progress: number) {
-  const flapWidth = bird.flightStyle === "hover" ? 0.26 : 0.18;
-
-  for (const center of bird.flapCenters) {
-    const distance = Math.abs(progress - center);
-    if (distance < flapWidth / 2) {
-      const localProgress = (progress - (center - flapWidth / 2)) / flapWidth;
-      const eased = localProgress * localProgress * (3 - 2 * localProgress);
-      const sequence = [0, 1, 2, 1, 0, 3, 4, 5, 4, 3, 0];
-      const sequenceIndex = Math.min(sequence.length - 1, Math.round(eased * (sequence.length - 1)));
-      return Math.min(sequence[sequenceIndex], frameCount - 1);
-    }
-  }
-
-  if (bird.flightStyle === "hover") {
-    const frame = Math.min(Math.round(1 + Math.sin(progress * Math.PI * 6 + bird.phase) * 0.6), frameCount - 1);
-    return frame;
-  }
-
-  const glideValue = bird.flightStyle === "teeter"
-    ? 0.4 + 0.5 * Math.sin(progress * Math.PI * 2.4 + bird.phase)
-    : 0.25 + 0.35 * Math.sin(progress * Math.PI * 1.6 + bird.phase);
-  const frame = clamp(Math.round(glideValue), 0, frameCount - 1);
-  return frame;
 }
 
 function makeCounts(): Counts {
@@ -1331,11 +1139,14 @@ export function App() {
       const raptorConfig = RAPTOR_BY_KEY.get(bird.raptorKey);
       if (!raptorConfig) continue;
 
-      const frames = raptorConfig.frames;
-      const frameIndex = getFlightFrameIndex(bird, frames.length, progress);
-      const { sx, sy, sw, sh } = frames[frameIndex];
-      const drawWidth = sw * scale;
-      const drawHeight = sh * scale;
+      const frameIndex = getFlightFrameIndex(bird, progress);
+      const { sx, sy, sw, sh, anchorX, anchorY, exclude } = raptorConfig.frames[frameIndex];
+      const pixelScale = FLIGHT_CELL_SIZE / (sprite.width / FLIGHT_SHEET_COLUMNS) * scale;
+      const drawWidth = sw * pixelScale;
+      const drawHeight = sh * pixelScale;
+      // Lock the beak/body to the flight path, independently of moving wing bounds.
+      const drawX = FLIGHT_CELL_SIZE * scale * 0.4 - anchorX * pixelScale;
+      const drawY = -FLIGHT_CELL_SIZE * scale * 0.04 - anchorY * pixelScale;
 
       ctx.save();
       ctx.translate(x, y);
@@ -1345,7 +1156,14 @@ export function App() {
       ctx.shadowColor = "rgba(16, 42, 47, 0.18)";
       ctx.shadowBlur = 6 + scale * 10;
       ctx.shadowOffsetY = 3 + scale * 8;
-      ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      if (exclude) {
+        const crop = new Path2D();
+        crop.rect(drawX, drawY, drawWidth, drawHeight);
+        crop.rect(drawX + exclude.x * pixelScale, drawY + exclude.y * pixelScale,
+          exclude.width * pixelScale, exclude.height * pixelScale);
+        ctx.clip(crop, "evenodd");
+      }
+      ctx.drawImage(sprite.image, sx, sy, sw, sh, drawX, drawY, drawWidth, drawHeight);
       ctx.restore();
     }
   }, [difficulty, spawnBird]);
