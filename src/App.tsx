@@ -48,9 +48,9 @@ import logoImage from "../assets/SFBBO_Logo_Rounded.png";
 import backdropImage from "../assets/backdrop.png";
 import meadowImage from "../assets/backdrop-meadow.png";
 import huntingSpriteFrames from "./huntingSpriteFrames.json";
-import mobbingSheet from "../assets/hawk-crows-sprite-sheet.png";
+import mobbingSheet from "../assets/crow-sprite-sheet.png";
 import huntingSheet from "../assets/kite-mouse-sprite-sheet.png";
-import { advanceSpecialScenes, getHuntingPose, getMobbingPose, SPECIAL_SCENES } from "./specialScenes";
+import { advanceSpecialScenes, getHuntingPose, getMobbingPose, getCrowPose, CROW_FLIGHT_FRAMES, SPECIAL_SCENES } from "./specialScenes";
 import americanKestrelSheet from "../assets/american-kestrel-sprite-sheet.png";
 import coopersHawkSheet from "../assets/coopers-hawk-sprite-sheet.png";
 import goldenEagleSheet from "../assets/golden-eagle-sprite-sheet.png";
@@ -104,12 +104,13 @@ type ThermalRaptorId =
   | "turkeyVulture"
   | "baldEagle";
 
-import { FLIGHT_CELL_SIZE, FLIGHT_SHEET_COLUMNS, getFlightFrameIndex } from "./flightAnimation";
+import { FLIGHT_CELL_SIZE, getFlightFrameIndex } from "./flightAnimation";
 
 import spriteFrames from "./birdSpriteFrames.json";
-import specialSpriteFrames from "./specialSpriteFrames.json";
+import { relativeBirdSize, getBirdViewScale } from "./birdSizes";
+import crowSpriteFrames from "./crowSpriteFrames.json";
 
-import { drawBirdSprite, type SpriteFrame } from "./birdSprite";
+import { drawBirdSprite, getSpritePixelScale, type SpriteFrame } from "./birdSprite";
 
 export type Raptor = {
   key: string;
@@ -253,7 +254,7 @@ export const RAPTORS: Raptor[] = [
     sheet: americanKestrelSheet,
     frames: spriteFrames["american-kestrel"],
     tint: "#e8a84c",
-    sizeScale: 0.47,
+    sizeScale: relativeBirdSize("americanKestrel"),
     profile: americanKestrelProfile,
     fact: "Small falcon; hovers while hunting on open fields.",
   },
@@ -265,7 +266,7 @@ export const RAPTORS: Raptor[] = [
     sheet: coopersHawkSheet,
     frames: spriteFrames["coopers-hawk"],
     tint: "#8ca6a9",
-    sizeScale: 0.62,
+    sizeScale: relativeBirdSize("coopersHawk"),
     profile: coopersHawkProfile,
     fact: "Medium accipiter; banded tail, hunts birds in backyards.",
   },
@@ -277,7 +278,7 @@ export const RAPTORS: Raptor[] = [
     sheet: goldenEagleSheet,
     frames: spriteFrames["golden-eagle"],
     tint: "#6b5c43",
-    sizeScale: 1.42,
+    sizeScale: relativeBirdSize("goldenEagle"),
     profile: goldenEagleProfile,
     fact: "Huge eagle; soaring flight, golden-brown wash on nape.",
   },
@@ -289,7 +290,7 @@ export const RAPTORS: Raptor[] = [
     sheet: northernHarrierSheet,
     frames: spriteFrames["northern-harrier"],
     tint: "#ab8660",
-    sizeScale: 0.89,
+    sizeScale: relativeBirdSize("northernHarrier"),
     profile: northernHarrierProfile,
     fact: "Low-flying raptor; white rump, owl-like facial disk.",
   },
@@ -301,7 +302,7 @@ export const RAPTORS: Raptor[] = [
     sheet: northernHarrierMaleSheet,
     frames: spriteFrames["northern-harrier-male"],
     tint: "#8a9ba8",
-    sizeScale: 0.86,
+    sizeScale: relativeBirdSize("northernHarrier"),
     profile: northernHarrierProfile,
     fact: "Low-flying raptor; white rump, owl-like facial disk.",
   },
@@ -313,7 +314,7 @@ export const RAPTORS: Raptor[] = [
     sheet: redShoulderedHawkSheet,
     frames: spriteFrames["red-shouldered-hawk"],
     tint: "#c35a32",
-    sizeScale: 0.78,
+    sizeScale: relativeBirdSize("redShoulderedHawk"),
     profile: redShoulderedHawkProfile,
     fact: "Medium hawk; reddish chest, translucent wing crescents.",
   },
@@ -325,7 +326,7 @@ export const RAPTORS: Raptor[] = [
     sheet: redTailedHawkSheet,
     frames: spriteFrames["red-tailed-hawk"],
     tint: "#d68538",
-    sizeScale: 1,
+    sizeScale: relativeBirdSize("redTailedHawk"),
     profile: redTailedHawkProfile,
     fact: "Large hawk; dark belly band, rufous tail in adults.",
   },
@@ -337,7 +338,7 @@ export const RAPTORS: Raptor[] = [
     sheet: turkeyVultureSheet,
     frames: spriteFrames["turkey-vulture"],
     tint: "#7b5547",
-    sizeScale: 1.42,
+    sizeScale: relativeBirdSize("turkeyVulture"),
     profile: turkeyVultureProfile,
     fact: "Large scavenger; dihedral wings, rocks side-to-side.",
   },
@@ -349,7 +350,7 @@ export const RAPTORS: Raptor[] = [
     sheet: baldEagleSheet,
     frames: spriteFrames["bald-eagle"],
     tint: "#4a3728",
-    sizeScale: 1.66,
+    sizeScale: relativeBirdSize("baldEagle"),
     profile: baldEagleProfile,
     fact: "Huge eagle; white head and tail, wings flat when soaring.",
   },
@@ -361,7 +362,7 @@ export const RAPTORS: Raptor[] = [
     sheet: whiteTailedKiteSheet,
     frames: spriteFrames["white-tailed-kite"],
     tint: "#c4b8a8",
-    sizeScale: 0.85,
+    sizeScale: relativeBirdSize("whiteTailedKite"),
     profile: whiteTailedKiteProfile,
     fact: "Graceful raptor; white body, black shoulders, hovers.",
   },
@@ -373,7 +374,7 @@ export const RAPTORS: Raptor[] = [
     sheet: ospreySheet,
     frames: spriteFrames["osprey"],
     tint: "#5c4a3a",
-    sizeScale: 1.35,
+    sizeScale: relativeBirdSize("osprey"),
     profile: ospreyProfile,
     fact: "Fish specialist; dark eye stripe, arched wings.",
   },
@@ -408,12 +409,12 @@ const TUTORIAL_COPY = {
 const SPAWN_RAPTORS = RAPTORS.filter((raptor) => raptor.key !== "northernHarrierMale");
 const MALE_NORTHERN_HARRIER = RAPTORS.find((raptor) => raptor.key === "northernHarrierMale");
 const THERMAL_RAPTORS = [
-  { id: "redShoulderedHawk", image: redShoulderedHawkVentralImage, sizeRatio: 0.83 },
-  { id: "redTailedHawk", image: redTailedHawkVentralImage, sizeRatio: 1 },
-  { id: "turkeyVulture", image: turkeyVultureVentralImage, sizeRatio: 1.41 },
-  { id: "goldenEagle", image: goldenEagleVentralImage, sizeRatio: 1.64 },
-  { id: "baldEagle", image: baldEagleVentralImage, sizeRatio: 1.65 },
-] as const satisfies ReadonlyArray<{ id: ThermalRaptorId; image: string; sizeRatio: number }>;
+  { id: "redShoulderedHawk", image: redShoulderedHawkVentralImage, sizeRatio: relativeBirdSize("redShoulderedHawk"), crop: [68, 208, 1812, 812] },
+  { id: "redTailedHawk", image: redTailedHawkVentralImage, sizeRatio: relativeBirdSize("redTailedHawk"), crop: [77, 226, 1804, 751] },
+  { id: "turkeyVulture", image: turkeyVultureVentralImage, sizeRatio: relativeBirdSize("turkeyVulture"), crop: [45, 249, 1840, 702] },
+  { id: "goldenEagle", image: goldenEagleVentralImage, sizeRatio: relativeBirdSize("goldenEagle"), crop: [39, 142, 1856, 868] },
+  { id: "baldEagle", image: baldEagleVentralImage, sizeRatio: relativeBirdSize("baldEagle"), crop: [42, 135, 1851, 856] },
+] as const satisfies ReadonlyArray<{ id: ThermalRaptorId; image: string; sizeRatio: number; crop: readonly [number, number, number, number] }>;
 
 const SPECIES_BEHAVIOR: Record<
   RaptorId,
@@ -434,9 +435,9 @@ const SPECIES_BEHAVIOR: Record<
 const DIFFICULTY = {
   beginner: {
     label: "Beginner",
-    flightDuration: [9000, 12500],
+    flightDuration: [12000, 15500],
     farScale: [0.1, 0.14],
-    nearScale: [0.3, 0.38],
+    nearScale: [0.23, 0.27],
     thermalMaxBirds: 1,
     thermalSpawnEvery: [10000, 14000],
   },
@@ -444,7 +445,7 @@ const DIFFICULTY = {
     label: "Expert",
     flightDuration: [8200, 11200],
     farScale: [0.08, 0.13],
-    nearScale: [0.25, 0.34],
+    nearScale: [0.21, 0.25],
     thermalMaxBirds: 2,
     thermalSpawnEvery: [7000, 11000],
   },
@@ -966,6 +967,7 @@ export function App() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const viewWidth = width / dpr;
     const viewHeight = height / dpr;
+    const viewScale = getBirdViewScale(viewWidth);
 
     const panel = canvas.parentElement?.querySelector(".tap-panel")?.getBoundingClientRect();
     const groundY = Math.min(viewHeight * 0.8, (panel ? panel.top - rect.top : viewHeight * 0.7) - 10);
@@ -986,7 +988,8 @@ export function App() {
     if (currentPhase === "playing") {
       const elapsed = (timestamp - startTimeRef.current) / 1000;
       const available = new Set(Object.entries(specialImagesRef.current)
-        .filter(([, image]) => image.complete && image.naturalWidth > 0)
+        .filter(([id, image]) => image.complete && image.naturalWidth > 0
+          && images[id === "hunting" ? "whiteTailedKite" : "redTailedHawk"]?.ready)
         .map(([id]) => id));
       advanceSpecialScenes(elapsed, specialStartedRef.current, actualCountsRef.current, available);
       const config = DIFFICULTY[difficulty];
@@ -1004,45 +1007,81 @@ export function App() {
 
     if (currentPhase === "playing") {
       const elapsed = (timestamp - startTimeRef.current) / 1000;
+      const config = DIFFICULTY[difficulty];
+      // Encounters use the same depth and species scales as ordinary birds.
+      const depth = (config.nearScale[0] + config.nearScale[1]) / 2 * viewScale;
       for (const scene of SPECIAL_SCENES) {
         const progress = (elapsed - scene.start) / scene.duration;
         const image = specialImagesRef.current[scene.id];
         if (!specialStartedRef.current.has(scene.id) || !image || progress < 0 || progress >= 1) continue;
-        if (scene.id === "hunting") {
-          const pose = getHuntingPose(progress, groundY, viewHeight);
-          const pixelScale = Math.min(viewWidth * 0.25, viewHeight * 0.34) / (image.naturalWidth / 4);
-          ctx.save();
-          ctx.globalAlpha = Math.min(1, progress * 12, (1 - progress) * 12);
-          if (!pose.carrying) {
-            const mouse = huntingSpriteFrames.mouse[Math.floor(progress * 8 * 12) % 4];
-            const mouseX = viewWidth * pose.mouseX;
-            ctx.fillStyle = "rgba(40, 30, 12, 0.25)";
-            ctx.beginPath();
-            ctx.ellipse(mouseX, groundY, mouse.sw * pixelScale * 0.4, 3, 0, 0, Math.PI * 2);
-            ctx.fill();
-            drawBirdSprite(ctx, image, mouse, pixelScale, mouseX - mouse.anchorX * pixelScale,
-              pose.mouseY - mouse.anchorY * pixelScale);
-          }
-          const kite = huntingSpriteFrames.kite[pose.frame];
-          drawBirdSprite(ctx, image, kite, pixelScale, viewWidth * pose.kiteX - kite.anchorX * pixelScale,
-            pose.kiteY - kite.anchorY * pixelScale);
-          ctx.restore();
-          continue;
-        }
-        const pose = getMobbingPose(progress);
-        const frame = pose.frame;
-        const cellWidth = image.naturalWidth / 4;
-        const cellHeight = image.naturalHeight / 4;
-        const crop = specialSpriteFrames["hawk-crows"][frame];
-        const size = Math.min(viewWidth * (scene.id === "mobbing" ? 0.32 : 0.25), viewHeight * 0.34);
-        const x = viewWidth * pose.x - size / 2;
-        const y = viewHeight * pose.y;
+        const sceneMs = progress * scene.duration * 1000;
         ctx.save();
         ctx.globalAlpha = Math.min(1, progress * 12, (1 - progress) * 12);
-        const pixelScale = size / cellWidth;
-        drawBirdSprite(ctx, image, crop, pixelScale,
-          x + (crop.sx - (frame % 4) * cellWidth) * pixelScale,
-          y + (crop.sy - Math.floor(frame / 4) * cellHeight) * pixelScale);
+        if (scene.id === "hunting") {
+          const pose = getHuntingPose(progress, groundY, viewHeight);
+          const raptor = RAPTOR_BY_ID.get("whiteTailedKite")!;
+          const sprite = images[raptor.key];
+          const scale = depth * raptor.sizeScale;
+          const pixelScale = getSpritePixelScale(raptor.frames[0].sw, scale);
+          const mouse = huntingSpriteFrames.mouse[pose.carrying ? 0 : Math.floor(sceneMs / 90) % 4];
+          const mouseScale = FLIGHT_CELL_SIZE * scale * 0.13 / mouse.sw;
+          const mouseHeight = mouse.sh * mouseScale;
+          const x = viewWidth * pose.kiteX;
+          const footY = pose.kiteY - mouseHeight;
+          const frameIndex = getFlightFrameIndex({
+            raptorId: raptor.id, flightStyle: "hover", duration: scene.duration * 1000,
+            phase: 0, flapCenters: [],
+          }, progress);
+          const frame = raptor.frames[frameIndex];
+          const opacity = ctx.globalAlpha;
+          ctx.globalAlpha = opacity * (1 - pose.diveBlend);
+          drawBirdSprite(ctx, sprite.image, frame, pixelScale,
+            x - (frame.anchorX - sprite.width / 4 * 0.2) * pixelScale,
+            footY - (frame.anchorY + sprite.width / 4 * 0.09) * pixelScale);
+          if (pose.diveBlend > 0) {
+            const diveFrame = huntingSpriteFrames.kite[pose.frame];
+            const diveScale = getSpritePixelScale(huntingSpriteFrames.kite[0].sw, scale);
+            ctx.globalAlpha = opacity * pose.diveBlend;
+            drawBirdSprite(ctx, image, diveFrame, diveScale,
+              x - diveFrame.anchorX * diveScale, footY - diveFrame.anchorY * diveScale);
+          }
+          ctx.globalAlpha = opacity;
+          const mouseX = pose.carrying ? x : viewWidth * pose.mouseX;
+          const mouseY = pose.carrying ? pose.kiteY : groundY;
+          if (!pose.carrying) {
+            ctx.fillStyle = "rgba(40, 30, 12, 0.25)";
+            ctx.beginPath();
+            ctx.ellipse(mouseX, groundY, mouse.sw * mouseScale * 0.4, 1.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          drawBirdSprite(ctx, image, mouse, mouseScale,
+            mouseX - mouse.anchorX * mouseScale, mouseY - mouse.anchorY * mouseScale);
+        } else {
+          const pose = getMobbingPose(progress);
+          const raptor = RAPTOR_BY_ID.get("redTailedHawk")!;
+          const sprite = images[raptor.key];
+          const frameIndex = getFlightFrameIndex({
+            raptorId: raptor.id, flightStyle: "flapGlide", duration: scene.duration * 1000,
+            phase: 0, flapCenters: [0.25, 0.65],
+          }, progress);
+          const frame = raptor.frames[frameIndex];
+          const pixelScale = getSpritePixelScale(raptor.frames[0].sw, depth * raptor.sizeScale);
+          const x = viewWidth * pose.x;
+          const y = viewHeight * pose.y;
+          drawBirdSprite(ctx, sprite.image, frame, pixelScale,
+            x - frame.anchorX * pixelScale, y - frame.anchorY * pixelScale);
+          for (let index = 0; index < 3; index++) {
+            const crow = getCrowPose(progress, index);
+            const crowFrame = crowSpriteFrames[CROW_FLIGHT_FRAMES[Math.floor((sceneMs / 520 + index * 0.31) * 16) % 16]];
+            const crowScale = getSpritePixelScale(crowSpriteFrames[0].sw, depth * 0.65);
+            ctx.save();
+            ctx.translate(x + crow.x * viewWidth, y + crow.y * viewHeight);
+            ctx.rotate(crow.rotation);
+            drawBirdSprite(ctx, image, crowFrame, crowScale,
+              -crowFrame.anchorX * crowScale, -crowFrame.anchorY * crowScale);
+            ctx.restore();
+          }
+        }
         ctx.restore();
       }
     }
@@ -1073,7 +1112,7 @@ export function App() {
         const y = here.py;
         // Fade in/out near the edges so birds don't pop on and off screen.
         const fadeEnvelope = clamp(Math.min(progress, 1 - progress) / 0.12, 0, 1);
-        const scale = bird.baseScale * bird.sizeRatio;
+        const scale = bird.baseScale * bird.sizeRatio * viewScale;
         // Point the head (sprite's "up") along the direction of travel, plus a
         // faint teeter so it doesn't look rigidly locked to the path.
         const heading = Math.atan2(ahead.py - here.py, ahead.px - here.px) + Math.PI / 2;
@@ -1088,15 +1127,18 @@ export function App() {
           rotation,
           alpha,
           sprite,
+          crop: THERMAL_RAPTORS.find((raptor) => raptor.id === bird.raptorId)!.crop,
         };
       })
       .filter((bird): bird is NonNullable<typeof bird> => Boolean(bird))
       .sort((a, b) => a.scale - b.scale);
 
     for (const thermalBird of visibleThermalBirds) {
-      const { x, y, scale, rotation, alpha, sprite } = thermalBird;
-      const drawWidth = sprite.width * scale;
-      const drawHeight = sprite.height * scale;
+      const { x, y, scale, rotation, alpha, sprite, crop } = thermalBird;
+      const [sx, sy, sw, sh] = crop;
+      // Normalize every ventral silhouette to the red-tail reference wingspan.
+      const drawWidth = 1804 * scale;
+      const drawHeight = drawWidth * sh / sw;
 
       ctx.save();
       ctx.translate(x, y);
@@ -1105,7 +1147,7 @@ export function App() {
       ctx.shadowColor = "rgba(17, 34, 42, 0.1)";
       ctx.shadowBlur = 4 + scale * 8;
       ctx.shadowOffsetY = 2 + scale * 6;
-      ctx.drawImage(sprite.image, 0, 0, sprite.width, sprite.height, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      ctx.drawImage(sprite.image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
     }
 
@@ -1155,7 +1197,7 @@ export function App() {
         
         const raptorConfig = RAPTOR_BY_KEY.get(bird.raptorKey);
         const speciesScale = raptorConfig?.sizeScale ?? 1;
-        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(Math.sin(Math.PI * progress), 1.12)) * speciesScale;
+        const scale = lerp(bird.farScale, bird.nearScale, Math.pow(Math.sin(Math.PI * progress), 1.12)) * speciesScale * viewScale;
         const alpha = lerp(0.7, 1, Math.pow(overhead, 0.5));
 
         return {
@@ -1209,7 +1251,7 @@ export function App() {
       const frameIndex = getFlightFrameIndex(bird, progress);
       const frame = raptorConfig.frames[frameIndex];
       const { anchorX, anchorY } = frame;
-      const pixelScale = FLIGHT_CELL_SIZE / (sprite.width / FLIGHT_SHEET_COLUMNS) * scale;
+      const pixelScale = getSpritePixelScale(raptorConfig.frames[0].sw, scale);
       // Lock the beak/body to the flight path, independently of moving wing bounds.
       const drawX = FLIGHT_CELL_SIZE * scale * 0.4 - anchorX * pixelScale;
       const drawY = -FLIGHT_CELL_SIZE * scale * 0.04 - anchorY * pixelScale;
@@ -2026,10 +2068,11 @@ export function App() {
                   className={difficulty === level ? "difficulty-button selected" : "difficulty-button"}
                   key={level}
                   onClick={() => setDifficulty(level)}
+                  aria-pressed={difficulty === level}
                   type="button"
                 >
                   {level === "beginner" ? <Gauge aria-hidden="true" /> : <Target aria-hidden="true" />}
-                  <span>{DIFFICULTY[level].label}</span>
+                  <span>{DIFFICULTY[level].label} <small>{level === "beginner" ? "Fewer, slower birds" : "More birds, faster arrivals"}</small></span>
                 </button>
               ))}
             </div>

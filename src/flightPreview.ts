@@ -1,4 +1,4 @@
-import { drawBirdSprite } from "./birdSprite";
+import { drawBirdSprite, getSpritePixelScale } from "./birdSprite";
 import { RAPTORS } from "./App";
 import { FLIGHT_CELL_SIZE, getFlightFrameIndex } from "./flightAnimation";
 
@@ -34,7 +34,7 @@ function draw(timestamp: number) {
   const width = canvas.clientWidth;
   const columns = width < 640 ? 2 : 3;
   const cellWidth = width / columns;
-  const cellHeight = 240;
+  const cellHeight = 320;
   const height = Math.ceil(RAPTORS.length / columns) * cellHeight;
   const dpr = window.devicePixelRatio || 1;
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== height * dpr) {
@@ -51,10 +51,10 @@ function draw(timestamp: number) {
     const frame = raptor.frames[frameIndex];
     const { anchorX, anchorY } = frame;
     const image = images[index];
-    const scale = Math.min(0.28, cellWidth / 700);
-    const pixelScale = FLIGHT_CELL_SIZE / (image.width / 4) * scale;
+    const scale = Math.min(0.28, cellWidth / 700) * raptor.sizeScale;
+    const pixelScale = getSpritePixelScale(raptor.frames[0].sw, scale);
     ctx.save();
-    ctx.translate(x, y + 110);
+    ctx.translate(x, y + 175);
     ctx.scale(direction, 1);
     const drawX = FLIGHT_CELL_SIZE * scale * 0.4 - anchorX * pixelScale;
     const drawY = -FLIGHT_CELL_SIZE * scale * 0.04 - anchorY * pixelScale;
@@ -63,7 +63,7 @@ function draw(timestamp: number) {
     ctx.fillStyle = "#153b3c";
     ctx.font = "14px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(raptor.name, x, y + 221);
+    ctx.fillText(raptor.name, x, y + 300);
   });
   requestAnimationFrame(draw);
 }

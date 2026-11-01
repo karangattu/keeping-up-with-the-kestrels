@@ -41,3 +41,22 @@ it("keeps the turkey vulture's beak on the flight path in pose 8", () => {
   expect(sourceBeak.x - frame.sx - frame.anchorX).toBe(0);
   expect(sourceBeak.y - frame.sy - frame.anchorY).toBe(0);
 });
+
+it("preserves bird size when the same atlas is exported at a different resolution", async () => {
+  const { getSpritePixelScale } = await import("./birdSprite");
+  const original = 250 * getSpritePixelScale(1280, 0.3);
+  const doubled = 500 * getSpritePixelScale(2560, 0.3);
+  expect(doubled).toBeCloseTo(original);
+});
+
+it("normalizes visible bird width rather than the surrounding transparent tile", async () => {
+  const { getSpritePixelScale } = await import("./birdSprite");
+  expect(250 * getSpritePixelScale(250, 0.25)).toBeCloseTo(140);
+  expect(340 * getSpritePixelScale(340, 0.25)).toBeCloseTo(140);
+});
+
+it("keeps the same field of view on a phone and desktop", async () => {
+  const { getBirdViewScale } = await import("./birdSizes");
+  expect(getBirdViewScale(640)).toBeCloseTo(getBirdViewScale(1280) / 2);
+  expect(getBirdViewScale(1920)).toBe(1);
+});

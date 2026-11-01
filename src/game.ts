@@ -19,11 +19,11 @@ export type Difficulty = "beginner" | "expert";
 
 export function getRoundPacing(elapsed: number, difficulty: Difficulty) {
   const progress = Math.max(0, Math.min(1, elapsed / ROUND_SECONDS));
-  const intensity = Math.pow(progress, 1.3);
   const expert = difficulty === "expert";
+  const intensity = Math.pow(progress, expert ? 1.3 : 1.6);
   return {
-    targetBirds: 1 + Math.floor(intensity * (expert ? 16 : 12)),
-    spawnEvery: (expert ? 3200 : 4000) * Math.pow(expert ? 0.0875 : 0.1, progress),
+    targetBirds: 1 + Math.floor(intensity * (expert ? 16 : 7)),
+    spawnEvery: (expert ? 3200 : 4500) * Math.pow(expert ? 0.0875 : 0.2, progress),
   };
 }
 

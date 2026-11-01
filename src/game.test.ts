@@ -355,11 +355,56 @@ test("round pacing builds steadily from one bird to a busy finale", async () => 
     const stages = [0, 15, 30, 45, 59].map((seconds) => getRoundPacing(seconds, difficulty));
     expect(stages[0].targetBirds).toBe(1);
     expect(stages[0].spawnEvery).toBeGreaterThan(2500);
-    expect(stages[4].targetBirds).toBeGreaterThanOrEqual(8);
-    expect(stages[4].spawnEvery).toBeLessThan(800);
+    expect(stages[4].targetBirds).toBeGreaterThanOrEqual(6);
+    expect(stages[4].spawnEvery).toBeLessThan(1200);
     for (let i = 1; i < stages.length; i++) {
       expect(stages[i].targetBirds).toBeGreaterThanOrEqual(stages[i - 1].targetBirds);
       expect(stages[i].spawnEvery).toBeLessThan(stages[i - 1].spawnEvery);
     }
+  }
+});
+
+test("Beginner has substantially fewer birds and longer gaps than Expert", async () => {
+  const { getRoundPacing } = await import("./game");
+  for (const seconds of [20, 40, 59]) {
+    const beginner = getRoundPacing(seconds, "beginner");
+    const expert = getRoundPacing(seconds, "expert");
+    expect(beginner.targetBirds).toBeLessThanOrEqual(expert.targetBirds * 0.65);
+    expect(beginner.spawnEvery).toBeGreaterThan(expert.spawnEvery * 1.7);
+  }
+  expect(getRoundPacing(59, "beginner").targetBirds).toBeLessThanOrEqual(8);
+});
+
+test("eagles retain their natural size advantage over large hawks", () => {
+  const hawk = RAPTORS.find(r => r.id === "redTailedHawk")!;
+  for (const id of ["baldEagle", "goldenEagle"]) {
+    const eagle = RAPTORS.find(r => r.id === id)!;
+    expect(eagle.sizeScale / hawk.sizeScale).toBeGreaterThan(1.5);
+    expect(eagle.sizeScale / hawk.sizeScale).toBeLessThanOrEqual(1.8);
+  }
+});
+
+test("osprey sits between a red-tail and an eagle at the same apparent distance", async () => {
+  const { getSpritePixelScale } = await import("./birdSprite");
+  const renderedWidth = (id: string) => {
+    const raptor = RAPTORS.find(r => r.id === id)!;
+    return raptor.frames[0].sw * getSpritePixelScale(raptor.frames[0].sw, 0.25 * raptor.sizeScale);
+  };
+  const ospreyToHawk = renderedWidth("osprey") / renderedWidth("redTailedHawk");
+  expect(ospreyToHawk).toBeGreaterThan(1.25);
+  expect(ospreyToHawk).toBeLessThan(1.4);
+  expect(renderedWidth("osprey")).toBeLessThan(renderedWidth("baldEagle") * 0.85);
+});
+
+test("all raptors keep the published approximate wingspan proportions at equal depth", async () => {
+  const { getSpritePixelScale } = await import("./birdSprite");
+  const expectedRatios: Record<string, number> = {
+    americanKestrel: 0.45, coopersHawk: 0.64, northernHarrier: 0.89,
+    redShoulderedHawk: 0.83, redTailedHawk: 1, whiteTailedKite: 0.85,
+    osprey: 1.34, turkeyVulture: 1.41, goldenEagle: 1.64, baldEagle: 1.65,
+  };
+  for (const bird of RAPTORS) {
+    const width = bird.frames[0].sw * getSpritePixelScale(bird.frames[0].sw, 0.25 * bird.sizeScale);
+    expect(width / 140).toBeCloseTo(expectedRatios[bird.id], 2);
   }
 });

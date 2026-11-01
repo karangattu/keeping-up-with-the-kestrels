@@ -1,3 +1,9 @@
+import { FLIGHT_CELL_SIZE } from "./flightAnimation";
+
+export function getSpritePixelScale(referenceWidth: number, scale: number) {
+  return FLIGHT_CELL_SIZE / referenceWidth * scale;
+}
+
 export type SpriteFrame = {
   sx: number;
   sy: number;
