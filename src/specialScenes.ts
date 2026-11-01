@@ -1,23 +1,46 @@
 import type { Counts, RaptorId } from "./game";
+import { WINGBEAT_MS } from "./flightAnimation";
 
 const smooth = (value: number) => {
   const p = Math.max(0, Math.min(1, value));
   return p * p * (3 - 2 * p);
 };
 
+function hermite(start: number, end: number, startTangent: number, endTangent: number, t: number) {
+  const p = Math.max(0, Math.min(1, t));
+  return (2 * p ** 3 - 3 * p ** 2 + 1) * start
+    + (p ** 3 - 2 * p ** 2 + p) * startTangent
+    + (-2 * p ** 3 + 3 * p ** 2) * end
+    + (p ** 3 - p ** 2) * endTangent;
+}
+
 export function getHuntingPose(progress: number, groundY: number, viewHeight: number) {
   const carrying = progress >= 0.65;
-  const approach = smooth(progress / 0.18);
-  const dive = smooth((progress - 0.4) / 0.25);
-  const departure = smooth((progress - 0.65) / 0.35);
+  const dive = Math.max(0, Math.min(1, (progress - 0.4) / 0.25));
+  const departure = Math.max(0, Math.min(1, (progress - 0.65) / 0.35));
   const hoverY = Math.min(viewHeight * 0.3, groundY - viewHeight * 0.25);
+  const rate = SPECIAL_SCENES.find((scene) => scene.id === "hunting")!.duration * 1000 / WINGBEAT_MS.whiteTailedKite;
+  const settlingCycle = Math.ceil(rate * 0.34) + 1;
+  let cycle = progress * rate;
+  if (progress >= 0.34) {
+    cycle = hermite(rate * 0.34, settlingCycle, rate * 0.1, 0, (progress - 0.34) / 0.1);
+  }
+  if (carrying) {
+    // Integrate the wingbeat rate so the first upstroke starts gently from glide.
+    const u = Math.min(1, (progress - 0.65) / 0.08);
+    cycle = settlingCycle + rate * 0.08 * (u ** 3 - u ** 4 / 2)
+      + rate * Math.max(0, progress - 0.73);
+  }
   return {
     carrying,
-    frame: Math.min(6, 3 + Math.floor(dive * 3)),
-    diveBlend: smooth((progress - 0.4) / 0.05) * (1 - smooth((progress - 0.6) / 0.05)),
-    kiteX: carrying ? 0.55 + departure * 0.8 : -0.15 + approach * 0.65 + dive * 0.05,
-    kiteY: carrying ? groundY - departure * viewHeight : hoverY + (groundY - hoverY) * dive,
-    mouseX: 0.35 + Math.min(1, progress / 0.65) * 0.2,
+    wingFrame: Math.floor((cycle % 1) * 16 + 1e-8) % 16,
+    pitch: 1.2 * smooth((progress - 0.4) / 0.09) * (1 - smooth((progress - 0.55) / 0.1))
+      - 0.55 * smooth((progress - 0.65) / 0.13),
+    kiteX: carrying ? hermite(0.55, 1.4, 0.14, 1.225, departure)
+      : progress < 0.4 ? -0.15 + smooth(progress / 0.18) * 0.65 : hermite(0.5, 0.55, 0, 0.1, dive),
+    kiteY: carrying ? hermite(groundY, -viewHeight * 0.1, 0, -viewHeight * 0.7, departure)
+      : hoverY + (groundY - hoverY) * smooth(dive),
+    mouseX: hermite(0.35, 0.55, 0.2, 0.26, progress / 0.65),
     mouseY: groundY,
   };
 }

@@ -969,17 +969,15 @@ export function App() {
     const viewHeight = height / dpr;
     const viewScale = getBirdViewScale(viewWidth);
 
-    const panel = canvas.parentElement?.querySelector(".tap-panel")?.getBoundingClientRect();
-    const groundY = Math.min(viewHeight * 0.8, (panel ? panel.top - rect.top : viewHeight * 0.7) - 10);
+    const groundY = viewHeight * 0.96;
     const meadow = meadowRef.current;
+    drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
     if (currentPhase === "playing" && meadow?.complete && meadow.naturalWidth > 0) {
-      const horizon = Math.max(viewHeight * 0.25, groundY - viewHeight * 0.1);
-      const sourceHorizon = meadow.naturalHeight * 0.55;
-      ctx.drawImage(meadow, 0, 0, meadow.naturalWidth, sourceHorizon, 0, 0, viewWidth, horizon);
-      ctx.drawImage(meadow, 0, sourceHorizon, meadow.naturalWidth, meadow.naturalHeight - sourceHorizon,
+      const horizon = viewHeight * 0.92;
+      const sourceHeight = Math.min(meadow.naturalHeight, (viewHeight - horizon) * meadow.naturalWidth / viewWidth);
+      const sourceY = Math.min(meadow.naturalHeight - sourceHeight, meadow.naturalHeight * 0.72);
+      ctx.drawImage(meadow, 0, sourceY, meadow.naturalWidth, sourceHeight,
         0, horizon, viewWidth, viewHeight - horizon);
-    } else {
-      drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
     }
 
     birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
@@ -1028,24 +1026,14 @@ export function App() {
           const mouseHeight = mouse.sh * mouseScale;
           const x = viewWidth * pose.kiteX;
           const footY = pose.kiteY - mouseHeight;
-          const frameIndex = getFlightFrameIndex({
-            raptorId: raptor.id, flightStyle: "hover", duration: scene.duration * 1000,
-            phase: 0, flapCenters: [],
-          }, progress);
-          const frame = raptor.frames[frameIndex];
-          const opacity = ctx.globalAlpha;
-          ctx.globalAlpha = opacity * (1 - pose.diveBlend);
+          const frame = raptor.frames[pose.wingFrame];
+          ctx.save();
+          ctx.translate(x, footY);
+          ctx.rotate(pose.pitch);
           drawBirdSprite(ctx, sprite.image, frame, pixelScale,
-            x - (frame.anchorX - sprite.width / 4 * 0.2) * pixelScale,
-            footY - (frame.anchorY + sprite.width / 4 * 0.09) * pixelScale);
-          if (pose.diveBlend > 0) {
-            const diveFrame = huntingSpriteFrames.kite[pose.frame];
-            const diveScale = getSpritePixelScale(huntingSpriteFrames.kite[0].sw, scale);
-            ctx.globalAlpha = opacity * pose.diveBlend;
-            drawBirdSprite(ctx, image, diveFrame, diveScale,
-              x - diveFrame.anchorX * diveScale, footY - diveFrame.anchorY * diveScale);
-          }
-          ctx.globalAlpha = opacity;
+            -(frame.anchorX - sprite.width / 4 * 0.2) * pixelScale,
+            -(frame.anchorY + sprite.width / 4 * 0.09) * pixelScale);
+          ctx.restore();
           const mouseX = pose.carrying ? x : viewWidth * pose.mouseX;
           const mouseY = pose.carrying ? pose.kiteY : groundY;
           if (!pose.carrying) {

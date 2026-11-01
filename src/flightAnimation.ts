@@ -5,7 +5,7 @@ export const FLIGHT_SHEET_COLUMNS = 4;
 // Logical cell size preserves the existing birds' size regardless of export resolution.
 export const FLIGHT_CELL_SIZE = 560;
 
-const WINGBEAT_MS: Record<RaptorId, number> = {
+export const WINGBEAT_MS: Record<RaptorId, number> = {
   americanKestrel: 320,
   coopersHawk: 480,
   goldenEagle: 900,

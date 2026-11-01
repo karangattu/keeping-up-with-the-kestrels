@@ -27,15 +27,6 @@ it("moves the hawk across the screen and gives each crow a continuous independen
 
 });
 
-it("keeps the kite talons while excluding the separately animated mouse", async () => {
-  const { default: frames } = await import("./huntingSpriteFrames.json");
-  const crop = frames.kite[6];
-  const contains = (x: number, y: number) => [...crop.clip.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)].some((m) =>
-    x - crop.sx >= Number(m[1]) && x - crop.sx < Number(m[1]) + Number(m[3]) && y - crop.sy === Number(m[2]));
-  expect(contains(880, 610)).toBe(true);
-  expect(contains(890, 640)).toBe(false);
-});
-
 it("keeps the running mouse on the ground until the kite reaches it", async () => {
   const { getHuntingPose } = await import("./specialScenes");
   for (const p of [0, 0.1, 0.3, 0.49]) {
@@ -43,7 +34,8 @@ it("keeps the running mouse on the ground until the kite reaches it", async () =
     expect(pose.mouseY).toBe(350);
     expect(pose.carrying).toBe(false);
     expect(pose.kiteY).toBeLessThan(350);
-    expect(pose.frame).toBeLessThan(7);
+    expect(pose.wingFrame).toBeGreaterThanOrEqual(0);
+    expect(pose.wingFrame).toBeLessThan(16);
   }
   const grab = getHuntingPose(0.65, 350, 500);
   expect(grab.kiteX).toBeCloseTo(grab.mouseX);
@@ -64,4 +56,28 @@ it("lets the hunting kite hover before a continuous dive to the mouse", async ()
     expect(Math.abs(before.kiteX - after.kiteX)).toBeLessThan(0.002);
     expect(Math.abs(before.kiteY - after.kiteY)).toBeLessThan(1);
   }
+});
+
+it("glides through the dive and resumes wingbeats without swapping birds", async () => {
+  const { getHuntingPose } = await import("./specialScenes");
+  for (const p of [0.46, 0.5, 0.55, 0.6, 0.65]) {
+    expect(getHuntingPose(p, 480, 500).wingFrame).toBe(0);
+  }
+  expect(getHuntingPose(0.53, 480, 500).pitch).toBeGreaterThan(0.8);
+  expect(getHuntingPose(0.8, 480, 500).pitch).toBeLessThan(0);
+  expect(getHuntingPose(0.75, 480, 500).wingFrame).toBeGreaterThanOrEqual(0);
+});
+
+it("keeps moving through the grab with matching velocities on each side", async () => {
+  const { getHuntingPose } = await import("./specialScenes");
+  const step = 0.0001;
+  const before = getHuntingPose(0.65 - step, 480, 500);
+  const grab = getHuntingPose(0.65, 480, 500);
+  const after = getHuntingPose(0.65 + step, 480, 500);
+  const incoming = (grab.kiteX - before.kiteX) / step;
+  const outgoing = (after.kiteX - grab.kiteX) / step;
+  expect(incoming).toBeGreaterThan(0.3);
+  expect(Math.abs(incoming - outgoing)).toBeLessThan(0.01);
+  expect(Math.abs((grab.kiteY - before.kiteY) / step - (after.kiteY - grab.kiteY) / step)).toBeLessThan(3);
+  expect(Math.abs(before.pitch - after.pitch)).toBeLessThan(0.002);
 });
