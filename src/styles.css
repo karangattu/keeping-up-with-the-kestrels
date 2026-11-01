@@ -425,7 +425,7 @@ button {
   bottom: max(16px, env(safe-area-inset-bottom));
   left: max(16px, env(safe-area-inset-left));
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 8px;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -443,9 +443,9 @@ button {
   flex-direction: column;
   justify-content: space-between;
   align-items: stretch;
-  gap: 8px;
+  gap: 4px;
   overflow: hidden;
-  padding: 10px 12px;
+  padding: 8px 4px;
   background-color: rgba(255, 255, 255, 0.05);
   background-image: radial-gradient(130% 120% at 0% 0%, color-mix(in srgb, var(--raptor-color) 16%, transparent), transparent 55%);
   border: 1px solid transparent;
@@ -467,13 +467,14 @@ button {
 
 .raptor-button-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
 }
 
 .raptor-button-profile-pic {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   object-fit: cover;
   border: 1.5px solid var(--raptor-color);
@@ -486,13 +487,13 @@ button {
 .raptor-button-name {
   position: relative;
   display: block;
-  min-height: 1.6em;
-  font-size: clamp(0.74rem, 1.05vw, 0.9rem);
+  min-height: 2.5em;
+  font-size: clamp(0.62rem, 0.85vw, 0.8rem);
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.25;
   opacity: 0.95;
-  text-align: left;
+  text-align: center;
   text-wrap: balance;
 }
 
@@ -500,7 +501,7 @@ button {
   position: relative;
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
+  justify-content: center;
   gap: 8px;
 }
 
