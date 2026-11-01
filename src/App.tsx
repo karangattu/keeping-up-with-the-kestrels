@@ -47,6 +47,8 @@ import posterImage from "../assets/game_poster.jpg";
 import logoImage from "../assets/SFBBO_Logo_Rounded.png";
 import meadowImage from "../assets/backdrop-meadow.png";
 import huntingSpriteFrames from "./huntingSpriteFrames.json";
+import huntingKiteSheet from "../assets/white-tailed-kite-hunting-sprite-sheet.png";
+import { getKiteAnimationFrame } from "./kiteHunt";
 import mobbingSheet from "../assets/crow-sprite-sheet.png";
 import huntingSheet from "../assets/kite-mouse-sprite-sheet.png";
 import { advanceSpecialScenes, getHuntingPose, getMobbingPose, getCrowPose, CROW_FLIGHT_FRAMES, SPECIAL_SCENES } from "./specialScenes";
@@ -684,6 +686,7 @@ export function App() {
   const rthaAudioRef = useRef<HTMLAudioElement | null>(null);
   const rshaAudioRef = useRef<HTMLAudioElement | null>(null);
   const meadowRef = useRef<HTMLImageElement | null>(null);
+  const huntingKiteRef = useRef<HTMLImageElement | null>(null);
   const imageMapRef = useRef<Record<string, SpriteAsset> | null>(null);
   const birdsRef = useRef<Bird[]>([]);
   const specialImagesRef = useRef<Record<string, HTMLImageElement>>({});
@@ -743,6 +746,9 @@ export function App() {
     const meadow = new Image();
     meadow.src = meadowImage;
     meadowRef.current = meadow;
+    const huntingKite = new Image();
+    huntingKite.src = huntingKiteSheet;
+    huntingKiteRef.current = huntingKite;
 
     for (const [id, src] of Object.entries({ mobbing: mobbingSheet, hunting: huntingSheet })) {
       const image = new Image();
@@ -982,7 +988,8 @@ export function App() {
       const elapsed = (timestamp - startTimeRef.current) / 1000;
       const available = new Set(Object.entries(specialImagesRef.current)
         .filter(([id, image]) => image.complete && image.naturalWidth > 0
-          && images[id === "hunting" ? "whiteTailedKite" : "redTailedHawk"]?.ready)
+          && images[id === "hunting" ? "whiteTailedKite" : "redTailedHawk"]?.ready
+          && (id !== "hunting" || (huntingKiteRef.current?.complete && huntingKiteRef.current.naturalWidth > 0)))
         .map(([id]) => id));
       advanceSpecialScenes(elapsed, specialStartedRef.current, actualCountsRef.current, available);
       const config = DIFFICULTY[difficulty];
@@ -1019,26 +1026,35 @@ export function App() {
           const mouse = huntingSpriteFrames.mouse[pose.carrying ? 0 : Math.floor(sceneMs / 90) % 4];
           const mouseScale = FLIGHT_CELL_SIZE * scale * 0.13 / mouse.sw;
           const mouseHeight = mouse.sh * mouseScale;
-          const x = viewWidth * pose.kiteX;
-          const footY = pose.kiteY - mouseHeight;
-          const frame = raptor.frames[pose.wingFrame];
+          const registered = getKiteAnimationFrame(progress, pose.wingFrame);
+          const capture = getKiteAnimationFrame(0.65, 0);
+          const bodyX = viewWidth * pose.kiteX - capture.gripX * pixelScale;
+          const bodyY = pose.kiteY - mouseHeight - capture.gripY * pixelScale;
+          const frameScale = pixelScale * registered.pixelRatio;
           ctx.save();
-          ctx.translate(x, footY);
+          ctx.translate(bodyX, bodyY);
           ctx.rotate(pose.pitch);
-          drawBirdSprite(ctx, sprite.image, frame, pixelScale,
-            -(frame.anchorX - sprite.width / 4 * 0.2) * pixelScale,
-            -(frame.anchorY + sprite.width / 4 * 0.09) * pixelScale);
+          if (pose.carrying) {
+            drawBirdSprite(ctx, image, mouse, mouseScale,
+              registered.gripX * pixelScale - mouse.anchorX * mouseScale,
+              registered.gripY * pixelScale);
+          }
+          ctx.save();
+          ctx.rotate(registered.rotation);
+          drawBirdSprite(ctx, registered.sheet === "hover" ? sprite.image : huntingKiteRef.current!,
+            registered.frame, frameScale,
+            -registered.frame.anchorX * frameScale, -registered.frame.anchorY * frameScale);
           ctx.restore();
-          const mouseX = pose.carrying ? x : viewWidth * pose.mouseX;
-          const mouseY = pose.carrying ? pose.kiteY : groundY;
+          ctx.restore();
           if (!pose.carrying) {
+            const mouseX = viewWidth * pose.mouseX;
             ctx.fillStyle = "rgba(40, 30, 12, 0.25)";
             ctx.beginPath();
             ctx.ellipse(mouseX, groundY, mouse.sw * mouseScale * 0.4, 1.5, 0, 0, Math.PI * 2);
             ctx.fill();
+            drawBirdSprite(ctx, image, mouse, mouseScale,
+              mouseX - mouse.anchorX * mouseScale, groundY - mouse.anchorY * mouseScale);
           }
-          drawBirdSprite(ctx, image, mouse, mouseScale,
-            mouseX - mouse.anchorX * mouseScale, mouseY - mouse.anchorY * mouseScale);
         } else {
           const pose = getMobbingPose(progress);
           const raptor = RAPTOR_BY_ID.get("redTailedHawk")!;

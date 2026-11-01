@@ -58,7 +58,7 @@ it("lets the hunting kite hover before a continuous dive to the mouse", async ()
   }
 });
 
-it("glides through the dive and resumes wingbeats without swapping birds", async () => {
+it("settles the base wing cycle for the dive and resumes it gently after pickup", async () => {
   const { getHuntingPose } = await import("./specialScenes");
   for (const p of [0.46, 0.5, 0.55, 0.6, 0.65]) {
     expect(getHuntingPose(p, 480, 500).wingFrame).toBe(0);
