@@ -17,6 +17,16 @@ export type RaptorId = (typeof RAPTOR_IDS)[number];
 
 export type Difficulty = "beginner" | "expert";
 
+export function getRoundPacing(elapsed: number, difficulty: Difficulty) {
+  const progress = Math.max(0, Math.min(1, elapsed / ROUND_SECONDS));
+  const intensity = Math.pow(progress, 1.3);
+  const expert = difficulty === "expert";
+  return {
+    targetBirds: 1 + Math.floor(intensity * (expert ? 16 : 12)),
+    spawnEvery: (expert ? 3200 : 4000) * Math.pow(expert ? 0.0875 : 0.1, progress),
+  };
+}
+
 export type Counts = Record<RaptorId, number>;
 
 export function makeEmptyCounts(): Counts {

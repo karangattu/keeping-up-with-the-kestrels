@@ -348,3 +348,18 @@ describe("RAPTORS config and profile pictures", () => {
     });
   });
 });
+
+test("round pacing builds steadily from one bird to a busy finale", async () => {
+  const { getRoundPacing } = await import("./game");
+  for (const difficulty of ["beginner", "expert"] as const) {
+    const stages = [0, 15, 30, 45, 59].map((seconds) => getRoundPacing(seconds, difficulty));
+    expect(stages[0].targetBirds).toBe(1);
+    expect(stages[0].spawnEvery).toBeGreaterThan(2500);
+    expect(stages[4].targetBirds).toBeGreaterThanOrEqual(8);
+    expect(stages[4].spawnEvery).toBeLessThan(800);
+    for (let i = 1; i < stages.length; i++) {
+      expect(stages[i].targetBirds).toBeGreaterThanOrEqual(stages[i - 1].targetBirds);
+      expect(stages[i].spawnEvery).toBeLessThan(stages[i - 1].spawnEvery);
+    }
+  }
+});

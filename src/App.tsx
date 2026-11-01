@@ -28,6 +28,7 @@ import {
   getComboReward,
   getFinalCountdownBeep,
   getMultiplier,
+  getRoundPacing,
   hash,
   makeEmptyCounts,
   randomBetween,
@@ -45,6 +46,11 @@ import rthaSound from "../assets/RTHA_sound.mp3";
 import posterImage from "../assets/game_poster.jpg";
 import logoImage from "../assets/SFBBO_Logo_Rounded.png";
 import backdropImage from "../assets/backdrop.png";
+import meadowImage from "../assets/backdrop-meadow.png";
+import huntingSpriteFrames from "./huntingSpriteFrames.json";
+import mobbingSheet from "../assets/hawk-crows-sprite-sheet.png";
+import huntingSheet from "../assets/kite-mouse-sprite-sheet.png";
+import { advanceSpecialScenes, getHuntingPose, getMobbingPose, SPECIAL_SCENES } from "./specialScenes";
 import americanKestrelSheet from "../assets/american-kestrel-sprite-sheet.png";
 import coopersHawkSheet from "../assets/coopers-hawk-sprite-sheet.png";
 import goldenEagleSheet from "../assets/golden-eagle-sprite-sheet.png";
@@ -101,6 +107,7 @@ type ThermalRaptorId =
 import { FLIGHT_CELL_SIZE, FLIGHT_SHEET_COLUMNS, getFlightFrameIndex } from "./flightAnimation";
 
 import spriteFrames from "./birdSpriteFrames.json";
+import specialSpriteFrames from "./specialSpriteFrames.json";
 
 import { drawBirdSprite, type SpriteFrame } from "./birdSprite";
 
@@ -427,9 +434,6 @@ const SPECIES_BEHAVIOR: Record<
 const DIFFICULTY = {
   beginner: {
     label: "Beginner",
-    minBirds: 3,
-    spawnEvery: [1700, 2400],
-    maxBirds: 4,
     flightDuration: [9000, 12500],
     farScale: [0.1, 0.14],
     nearScale: [0.3, 0.38],
@@ -438,9 +442,6 @@ const DIFFICULTY = {
   },
   expert: {
     label: "Expert",
-    minBirds: 4,
-    spawnEvery: [1050, 1600],
-    maxBirds: 6,
     flightDuration: [8200, 11200],
     farScale: [0.08, 0.13],
     nearScale: [0.25, 0.34],
@@ -451,9 +452,6 @@ const DIFFICULTY = {
   Difficulty,
   {
     label: string;
-    minBirds: number;
-    spawnEvery: [number, number];
-    maxBirds: number;
     flightDuration: [number, number];
     farScale: [number, number];
     nearScale: [number, number];
@@ -686,8 +684,11 @@ export function App() {
   const rthaAudioRef = useRef<HTMLAudioElement | null>(null);
   const rshaAudioRef = useRef<HTMLAudioElement | null>(null);
   const backdropRef = useRef<HTMLImageElement | null>(null);
+  const meadowRef = useRef<HTMLImageElement | null>(null);
   const imageMapRef = useRef<Record<string, SpriteAsset> | null>(null);
   const birdsRef = useRef<Bird[]>([]);
+  const specialImagesRef = useRef<Record<string, HTMLImageElement>>({});
+  const specialStartedRef = useRef(new Set<string>());
   const thermalImageMapRef = useRef<Record<ThermalRaptorId, SpriteAsset> | null>(null);
   const thermalBirdsRef = useRef<ThermalBird[]>([]);
   const actualCountsRef = useRef<Counts>(makeCounts());
@@ -743,6 +744,15 @@ export function App() {
     const backdrop = new Image();
     backdrop.src = backdropImage;
     backdropRef.current = backdrop;
+    const meadow = new Image();
+    meadow.src = meadowImage;
+    meadowRef.current = meadow;
+
+    for (const [id, src] of Object.entries({ mobbing: mobbingSheet, hunting: huntingSheet })) {
+      const image = new Image();
+      image.src = src;
+      specialImagesRef.current[id] = image;
+    }
 
     const entries = RAPTORS.map((raptor) => {
       const image = new Image();
@@ -957,26 +967,83 @@ export function App() {
     const viewWidth = width / dpr;
     const viewHeight = height / dpr;
 
-    drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
+    const panel = canvas.parentElement?.querySelector(".tap-panel")?.getBoundingClientRect();
+    const groundY = Math.min(viewHeight * 0.8, (panel ? panel.top - rect.top : viewHeight * 0.7) - 10);
+    const meadow = meadowRef.current;
+    if (currentPhase === "playing" && meadow?.complete && meadow.naturalWidth > 0) {
+      const horizon = Math.max(viewHeight * 0.25, groundY - viewHeight * 0.1);
+      const sourceHorizon = meadow.naturalHeight * 0.55;
+      ctx.drawImage(meadow, 0, 0, meadow.naturalWidth, sourceHorizon, 0, 0, viewWidth, horizon);
+      ctx.drawImage(meadow, 0, sourceHorizon, meadow.naturalWidth, meadow.naturalHeight - sourceHorizon,
+        0, horizon, viewWidth, viewHeight - horizon);
+    } else {
+      drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
+    }
 
     birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
     thermalBirdsRef.current = thermalBirdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.02);
 
     if (currentPhase === "playing") {
+      const elapsed = (timestamp - startTimeRef.current) / 1000;
+      const available = new Set(Object.entries(specialImagesRef.current)
+        .filter(([, image]) => image.complete && image.naturalWidth > 0)
+        .map(([id]) => id));
+      advanceSpecialScenes(elapsed, specialStartedRef.current, actualCountsRef.current, available);
       const config = DIFFICULTY[difficulty];
-      while (birdsRef.current.length < config.minBirds) {
-        spawnBird(viewWidth, viewHeight, timestamp - randomBetween([0, 2400]));
-        nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery) * 0.55;
-      }
-
-      if (timestamp >= nextSpawnRef.current && birdsRef.current.length < config.maxBirds) {
+      const pacing = getRoundPacing(elapsed, difficulty);
+      if (elapsed < ROUND_SECONDS && timestamp >= nextSpawnRef.current && birdsRef.current.length < pacing.targetBirds) {
         spawnBird(viewWidth, viewHeight, timestamp);
-        nextSpawnRef.current = timestamp + randomBetween(config.spawnEvery);
+        nextSpawnRef.current = timestamp + pacing.spawnEvery * randomBetween([0.85, 1.15]);
       }
 
       if (timestamp >= nextThermalSpawnRef.current && thermalBirdsRef.current.length < config.thermalMaxBirds) {
         spawnThermalBird(viewWidth, viewHeight, timestamp);
         nextThermalSpawnRef.current = timestamp + randomBetween(config.thermalSpawnEvery);
+      }
+    }
+
+    if (currentPhase === "playing") {
+      const elapsed = (timestamp - startTimeRef.current) / 1000;
+      for (const scene of SPECIAL_SCENES) {
+        const progress = (elapsed - scene.start) / scene.duration;
+        const image = specialImagesRef.current[scene.id];
+        if (!specialStartedRef.current.has(scene.id) || !image || progress < 0 || progress >= 1) continue;
+        if (scene.id === "hunting") {
+          const pose = getHuntingPose(progress, groundY, viewHeight);
+          const pixelScale = Math.min(viewWidth * 0.25, viewHeight * 0.34) / (image.naturalWidth / 4);
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, progress * 12, (1 - progress) * 12);
+          if (!pose.carrying) {
+            const mouse = huntingSpriteFrames.mouse[Math.floor(progress * 8 * 12) % 4];
+            const mouseX = viewWidth * pose.mouseX;
+            ctx.fillStyle = "rgba(40, 30, 12, 0.25)";
+            ctx.beginPath();
+            ctx.ellipse(mouseX, groundY, mouse.sw * pixelScale * 0.4, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            drawBirdSprite(ctx, image, mouse, pixelScale, mouseX - mouse.anchorX * pixelScale,
+              pose.mouseY - mouse.anchorY * pixelScale);
+          }
+          const kite = huntingSpriteFrames.kite[pose.frame];
+          drawBirdSprite(ctx, image, kite, pixelScale, viewWidth * pose.kiteX - kite.anchorX * pixelScale,
+            pose.kiteY - kite.anchorY * pixelScale);
+          ctx.restore();
+          continue;
+        }
+        const pose = getMobbingPose(progress);
+        const frame = pose.frame;
+        const cellWidth = image.naturalWidth / 4;
+        const cellHeight = image.naturalHeight / 4;
+        const crop = specialSpriteFrames["hawk-crows"][frame];
+        const size = Math.min(viewWidth * (scene.id === "mobbing" ? 0.32 : 0.25), viewHeight * 0.34);
+        const x = viewWidth * pose.x - size / 2;
+        const y = viewHeight * pose.y;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, progress * 12, (1 - progress) * 12);
+        const pixelScale = size / cellWidth;
+        drawBirdSprite(ctx, image, crop, pixelScale,
+          x + (crop.sx - (frame % 4) * cellWidth) * pixelScale,
+          y + (crop.sy - Math.floor(frame / 4) * cellHeight) * pixelScale);
+        ctx.restore();
       }
     }
 
@@ -1174,7 +1241,7 @@ export function App() {
       if (!startTimeRef.current) {
         startTimeRef.current = timestamp;
         nextSpawnRef.current = timestamp + 450;
-        nextThermalSpawnRef.current = timestamp + 1400;
+        nextThermalSpawnRef.current = timestamp + 9000;
         lastFrameRef.current = timestamp;
       }
 
@@ -1219,6 +1286,8 @@ export function App() {
         const hiddenDuration = performance.now() - hiddenAtRef.current;
         hiddenAtRef.current = 0;
         if (startTimeRef.current > 0) startTimeRef.current += hiddenDuration;
+        for (const bird of birdsRef.current) bird.startedAt += hiddenDuration;
+        for (const bird of thermalBirdsRef.current) bird.startedAt += hiddenDuration;
         nextSpawnRef.current += hiddenDuration;
         nextThermalSpawnRef.current += hiddenDuration;
         lastBeepSecondRef.current = 0;
@@ -1336,6 +1405,7 @@ export function App() {
     comboStreakRef.current = 0;
     comboBonusRef.current = 0;
     actualCountsRef.current = makeCounts();
+    specialStartedRef.current = new Set();
     birdsRef.current = [];
     thermalBirdsRef.current = [];
     startTimeRef.current = 0;
@@ -1396,6 +1466,8 @@ export function App() {
     } else {
       const pauseDuration = performance.now() - pausedAtRef.current;
       if (startTimeRef.current > 0) startTimeRef.current += pauseDuration;
+      for (const bird of birdsRef.current) bird.startedAt += pauseDuration;
+      for (const bird of thermalBirdsRef.current) bird.startedAt += pauseDuration;
       nextSpawnRef.current += pauseDuration;
       nextThermalSpawnRef.current += pauseDuration;
       pausedAtRef.current = 0;
