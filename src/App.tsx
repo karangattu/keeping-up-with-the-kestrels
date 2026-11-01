@@ -45,7 +45,6 @@ import rshaSound from "../assets/RSHA_sound.mp3";
 import rthaSound from "../assets/RTHA_sound.mp3";
 import posterImage from "../assets/game_poster.jpg";
 import logoImage from "../assets/SFBBO_Logo_Rounded.png";
-import backdropImage from "../assets/backdrop.png";
 import meadowImage from "../assets/backdrop-meadow.png";
 import huntingSpriteFrames from "./huntingSpriteFrames.json";
 import mobbingSheet from "../assets/crow-sprite-sheet.png";
@@ -684,7 +683,6 @@ export function App() {
   const gameMusicRef = useRef<HTMLAudioElement | null>(null);
   const rthaAudioRef = useRef<HTMLAudioElement | null>(null);
   const rshaAudioRef = useRef<HTMLAudioElement | null>(null);
-  const backdropRef = useRef<HTMLImageElement | null>(null);
   const meadowRef = useRef<HTMLImageElement | null>(null);
   const imageMapRef = useRef<Record<string, SpriteAsset> | null>(null);
   const birdsRef = useRef<Bird[]>([]);
@@ -742,9 +740,6 @@ export function App() {
   const maxScore = useMemo(() => computeMaxScore(actualCounts, difficulty), [actualCounts, difficulty]);
 
   useEffect(() => {
-    const backdrop = new Image();
-    backdrop.src = backdropImage;
-    backdropRef.current = backdrop;
     const meadow = new Image();
     meadow.src = meadowImage;
     meadowRef.current = meadow;
@@ -971,7 +966,7 @@ export function App() {
 
     const groundY = viewHeight * 0.96;
     const meadow = meadowRef.current;
-    drawBackdrop(ctx, viewWidth, viewHeight, backdropRef.current);
+    ctx.clearRect(0, 0, viewWidth, viewHeight);
     if (currentPhase === "playing" && meadow?.complete && meadow.naturalWidth > 0) {
       const horizon = viewHeight * 0.92;
       const sourceHeight = Math.min(meadow.naturalHeight, (viewHeight - horizon) * meadow.naturalWidth / viewWidth);
@@ -2475,30 +2470,4 @@ export function App() {
       )}
     </main>
   );
-}
-
-function drawBackdrop(
-  ctx: CanvasRenderingContext2D,
-  viewWidth: number,
-  viewHeight: number,
-  backdrop: HTMLImageElement | null,
-) {
-  if (backdrop?.complete && backdrop.naturalWidth > 0) {
-    const scale = Math.max(viewWidth / backdrop.naturalWidth, viewHeight / backdrop.naturalHeight);
-    const width = backdrop.naturalWidth * scale;
-    const height = backdrop.naturalHeight * scale;
-    const x = (viewWidth - width) / 2;
-    const y = (viewHeight - height) / 2;
-    ctx.drawImage(backdrop, x, y, width, height);
-    ctx.fillStyle = "rgba(232, 244, 241, 0.08)";
-    ctx.fillRect(0, 0, viewWidth, viewHeight);
-    return;
-  }
-
-  const sky = ctx.createLinearGradient(0, 0, 0, viewHeight);
-  sky.addColorStop(0, "#b9dfe8");
-  sky.addColorStop(0.58, "#e9f3ed");
-  sky.addColorStop(1, "#cbb48d");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, viewWidth, viewHeight);
 }

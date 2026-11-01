@@ -278,7 +278,7 @@ button {
 }
 
 .game-screen {
-  background: #badfea;
+  background: #badfea url("../assets/backdrop.png") center / cover no-repeat;
 }
 
 .countdown-screen {
