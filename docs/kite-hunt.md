@@ -7,8 +7,11 @@ There is no crossfade between differently aligned bodies.
 `src/kiteHuntFrames.json` records the tail, beak, and talon grip points for each
 generated pose. Registration aligns the beak-to-tail axis and body length with
 the hovering kite. Both animations rotate around the same torso point. The
-small mouse remains a separate sprite and attaches to the registered talons
-after pickup; wings can occlude it during the downstroke.
+mouse remains separate during the ground approach and pickup. The climb-out uses
+the carrying poses in `assets/kite-mouse-sprite-sheet.png`, where the mouse is
+already painted into the talons. No second mouse is drawn over those poses.
+The switch happens just after pickup, behind the counters, with the same torso
+registration and body scale.
 
 The game keeps its existing continuous flight path and counts the whole hunt as
 one kite observation. The shared neutral pose is reused from the original sheet

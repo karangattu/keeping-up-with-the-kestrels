@@ -1,5 +1,6 @@
 import hoverFrames from "./birdSpriteFrames.json";
 import huntingFrames from "./kiteHuntFrames.json";
+import carryingFrames from "./kiteCarryFrames.json";
 import type { SpriteFrame } from "./birdSprite";
 
 // The approved neutral hover pose: tail (55,247), beak (292,235).
@@ -9,7 +10,7 @@ const BODY_LENGTH = Math.hypot(BODY_DX, BODY_DY);
 const BODY_ANGLE = Math.atan2(BODY_DY, BODY_DX);
 
 type KiteFrame = {
-  sheet: "hover" | "hunt";
+  sheet: "hover" | "hunt" | "carry";
   index: number;
   frame: SpriteFrame;
   bodyLength: number;
@@ -25,24 +26,29 @@ const hovering: KiteFrame[] = hoverFrames["white-tailed-kite"].map((frame, index
   bodyLength: BODY_LENGTH, pixelRatio: 1, rotation: 0, gripX: 2.25, gripY: 22,
 }));
 
-const hunting: KiteFrame[] = huntingFrames.map((frame, index) => {
-  const anchorX = frame.tailX * 0.25 + frame.beakX * 0.75;
-  const anchorY = frame.tailY * 0.25 + frame.beakY * 0.75;
-  const dx = frame.beakX - frame.tailX;
-  const dy = frame.beakY - frame.tailY;
-  const bodyLength = Math.hypot(dx, dy);
-  const pixelRatio = BODY_LENGTH / bodyLength;
-  const rotation = BODY_ANGLE - Math.atan2(dy, dx);
-  const gripX = (frame.talonX - anchorX) * pixelRatio;
-  const gripY = (frame.talonY - anchorY) * pixelRatio;
-  return {
-    sheet: "hunt", index,
-    frame: { sx: frame.sx, sy: frame.sy, sw: frame.sw, sh: frame.sh, anchorX: anchorX - frame.sx, anchorY: anchorY - frame.sy },
-    bodyLength, pixelRatio, rotation,
-    gripX: gripX * Math.cos(rotation) - gripY * Math.sin(rotation),
-    gripY: gripX * Math.sin(rotation) + gripY * Math.cos(rotation),
-  };
-});
+function registerFrames(frames: typeof huntingFrames, sheet: "hunt" | "carry", firstIndex: number): KiteFrame[] {
+  return frames.map((frame, index) => {
+    const anchorX = frame.tailX * 0.25 + frame.beakX * 0.75;
+    const anchorY = frame.tailY * 0.25 + frame.beakY * 0.75;
+    const dx = frame.beakX - frame.tailX;
+    const dy = frame.beakY - frame.tailY;
+    const bodyLength = Math.hypot(dx, dy);
+    const pixelRatio = BODY_LENGTH / bodyLength;
+    const rotation = BODY_ANGLE - Math.atan2(dy, dx);
+    const gripX = (frame.talonX - anchorX) * pixelRatio;
+    const gripY = (frame.talonY - anchorY) * pixelRatio;
+    return {
+      sheet, index: index + firstIndex,
+      frame: { sx: frame.sx, sy: frame.sy, sw: frame.sw, sh: frame.sh, anchorX: anchorX - frame.sx, anchorY: anchorY - frame.sy },
+      bodyLength, pixelRatio, rotation,
+      gripX: gripX * Math.cos(rotation) - gripY * Math.sin(rotation),
+      gripY: gripX * Math.sin(rotation) + gripY * Math.cos(rotation),
+    };
+  });
+}
+
+const hunting = registerFrames(huntingFrames, "hunt", 0);
+const carrying = registerFrames(carryingFrames, "carry", 8);
 
 export function getKiteAnimationFrame(progress: number, wingFrame: number): KiteFrame {
   if (progress <= 0.44) return hovering[wingFrame];
@@ -52,6 +58,6 @@ export function getKiteAnimationFrame(progress: number, wingFrame: number): Kite
     return index === 0 ? hovering[0] : hunting[index];
   }
   if (progress < 0.66) return hunting[Math.min(7, 4 + Math.floor((progress - 0.6) / 0.05 * 4))];
-  // The generated final pose raises the wings; reuse the half-down recovery.
-  return hunting[[8, 9, 10, 11, 12, 13, 14, 13][Math.floor(wingFrame / 2)]];
+  // The existing sheet has the mouse painted into the closed talons.
+  return carrying[[7, 6, 0, 6, 7, 5, 4, 5][Math.floor(wingFrame / 2)]];
 }

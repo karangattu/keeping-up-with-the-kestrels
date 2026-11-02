@@ -18,7 +18,7 @@ it("uses dedicated dive, grasp, and carrying poses after the shared pose", async
   expect(getKiteAnimationFrame(0.65, 0).index).toBe(7);
   for (const p of [0.67, 0.7, 0.8, 0.9]) {
     const frame = getKiteAnimationFrame(p, 0);
-    expect(frame.sheet).toBe("hunt");
+    expect(frame.sheet).toBe("carry");
     expect(frame.index).toBeGreaterThanOrEqual(8);
     expect(frame.index).toBeLessThanOrEqual(15);
   }
@@ -37,9 +37,10 @@ it("keeps a constant torso scale across hunting poses, regardless of the wing bo
 it("projects the hunting beak and tail onto the approved hover body axis", async () => {
   const { getKiteAnimationFrame } = await import("./kiteHunt");
   const { default: landmarks } = await import("./kiteHuntFrames.json");
+  const { default: carrying } = await import("./kiteCarryFrames.json");
   for (const p of [0.49, 0.53, 0.61, 0.64, 0.65, 0.8]) {
     const registered = getKiteAnimationFrame(p, 6);
-    const source = landmarks[registered.index];
+    const source = registered.sheet === "carry" ? carrying[registered.index - 8] : landmarks[registered.index];
     for (const [x, y, expectedX, expectedY] of [
       [source.beakX, source.beakY, 59.25, -3],
       [source.tailX, source.tailY, -177.75, 9],

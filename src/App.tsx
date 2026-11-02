@@ -1034,14 +1034,16 @@ export function App() {
           ctx.save();
           ctx.translate(bodyX, bodyY);
           ctx.rotate(pose.pitch);
-          if (pose.carrying) {
+          if (pose.carrying && registered.sheet !== "carry") {
             drawBirdSprite(ctx, image, mouse, mouseScale,
               registered.gripX * pixelScale - mouse.anchorX * mouseScale,
               registered.gripY * pixelScale);
           }
           ctx.save();
           ctx.rotate(registered.rotation);
-          drawBirdSprite(ctx, registered.sheet === "hover" ? sprite.image : huntingKiteRef.current!,
+          const kiteImage = registered.sheet === "hover" ? sprite.image
+            : registered.sheet === "carry" ? image : huntingKiteRef.current!;
+          drawBirdSprite(ctx, kiteImage,
             registered.frame, frameScale,
             -registered.frame.anchorX * frameScale, -registered.frame.anchorY * frameScale);
           ctx.restore();
