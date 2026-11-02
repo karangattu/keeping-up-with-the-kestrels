@@ -1027,10 +1027,6 @@ button {
 }
 
 
-.tutorial-screen {
-  background: #badfea;
-}
-
 .tutorial-card {
   position: absolute;
   top: max(80px, env(safe-area-inset-top));
