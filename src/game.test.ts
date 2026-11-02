@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  COMBO_BASE,
   computeAccuracy,
   computeCappedTotalScore,
   computeMaxScore,
@@ -9,9 +8,7 @@ import {
   computeTotalDelta,
   computeTotalScore,
   formatTime,
-  getComboReward,
   getFinalCountdownBeep,
-  getMultiplier,
   hash,
   makeEmptyCounts,
   randomBetween,
@@ -65,45 +62,6 @@ describe("formatTime", () => {
   });
 });
 
-describe("getMultiplier", () => {
-  test("returns 1 for streaks below 2", () => {
-    expect(getMultiplier(0)).toBe(1);
-    expect(getMultiplier(1)).toBe(1);
-  });
-
-  test("returns 2x at 2 consecutive correct", () => {
-    expect(getMultiplier(2)).toBe(2);
-  });
-
-  test("returns 3x at 3 consecutive correct", () => {
-    expect(getMultiplier(3)).toBe(3);
-  });
-
-  test("returns 5x at 4 or more consecutive correct", () => {
-    expect(getMultiplier(4)).toBe(5);
-    expect(getMultiplier(10)).toBe(5);
-  });
-});
-
-describe("getComboReward", () => {
-  test("awards no reward while the streak is still building (>1)", () => {
-    expect(getComboReward(0)).toBe(0);
-    expect(getComboReward(1)).toBe(0);
-  });
-
-  test("awards (multiplier - 1) * COMBO_BASE at 2+ consecutive on-target taps", () => {
-    expect(getComboReward(2)).toBe((getMultiplier(2) - 1) * COMBO_BASE);
-    expect(getComboReward(3)).toBe((getMultiplier(3) - 1) * COMBO_BASE);
-    expect(getComboReward(4)).toBe((getMultiplier(4) - 1) * COMBO_BASE);
-    expect(getComboReward(10)).toBe((getMultiplier(10) - 1) * COMBO_BASE);
-  });
-
-  test("a broken streak (0) yields no reward", () => {
-    expect(getComboReward(0)).toBe(0);
-    expect(getComboReward(-1)).toBe(0);
-  });
-});
-
 describe("computeNextComboStreak", () => {
   test("advances the streak when the tap is exactly on target", () => {
     expect(computeNextComboStreak(0, 3, 3)).toBe(1);
@@ -142,77 +100,27 @@ describe("getFinalCountdownBeep", () => {
   });
 });
 
-describe("scoreForSpecies (via computeScorePerSpecies)", () => {
-  test("exact match awards 10 base points", () => {
+describe("observation grading", () => {
+  test.each([
+    [3, 3, 30], [3, 2, 20], [3, 1, 10], [3, 0, 0],
+    [3, 4, 20], [3, 5, 10], [3, 6, 0], [3, 7, -10],
+    [0, 0, 0], [0, 1, -10], [0, 5, -50], [1, 0, 0], [2, 0, 0],
+  ])("%i actual and %i counted earns %i Beginner points", (actual, player, expected) => {
+    const actualCounts = { ...makeEmptyCounts(), americanKestrel: actual };
+    const playerCounts = { ...makeEmptyCounts(), americanKestrel: player };
+    expect(computeScorePerSpecies(actualCounts, playerCounts, "beginner").americanKestrel).toBe(expected);
+    expect(computeScorePerSpecies(actualCounts, playerCounts, "expert").americanKestrel).toBe(expected * 2);
+  });
+
+  test("a wrong species cancels one correct observation", () => {
     const actual = { ...makeEmptyCounts(), americanKestrel: 3 };
-    const player = { ...actual };
-    const result = computeScorePerSpecies(actual, player, "beginner");
-    expect(result.americanKestrel).toBe(10);
+    const player = { ...actual, redTailedHawk: 1 };
+    expect(computeTotalScore(computeScorePerSpecies(actual, player, "beginner"))).toBe(20);
   });
 
-  test("off by 1 awards 5 base points when species was present", () => {
-    const actual = { ...makeEmptyCounts(), americanKestrel: 3 };
-    const player = { ...actual, americanKestrel: 2 };
-    const result = computeScorePerSpecies(actual, player, "beginner");
-    expect(result.americanKestrel).toBe(5);
-  });
-
-  test("off by 2 awards 2 base points when species was present", () => {
-    const actual = { ...makeEmptyCounts(), americanKestrel: 3 };
-    const player = { ...actual, americanKestrel: 1 };
-    const result = computeScorePerSpecies(actual, player, "beginner");
-    expect(result.americanKestrel).toBe(2);
-  });
-
-  test("off by 3+ awards 0 points when species was present", () => {
-    const actual = { ...makeEmptyCounts(), americanKestrel: 3 };
-    const player = { ...actual, americanKestrel: 0 };
-    const result = computeScorePerSpecies(actual, player, "beginner");
-    expect(result.americanKestrel).toBe(0);
-  });
-
-  test("over-counting a non-present species by 1 applies -5 penalty", () => {
-    const result = computeScorePerSpecies(makeEmptyCounts(), {
-      ...makeEmptyCounts(),
-      americanKestrel: 1,
-    }, "beginner");
-    expect(result.americanKestrel).toBe(-5);
-  });
-
-  test("over-counting a non-present species by 2 applies -8 penalty", () => {
-    const result = computeScorePerSpecies(makeEmptyCounts(), {
-      ...makeEmptyCounts(),
-      americanKestrel: 2,
-    }, "beginner");
-    expect(result.americanKestrel).toBe(-8);
-  });
-
-  test("over-counting a non-present species by 3+ applies -10 penalty", () => {
-    const result = computeScorePerSpecies(makeEmptyCounts(), {
-      ...makeEmptyCounts(),
-      americanKestrel: 5,
-    }, "beginner");
-    expect(result.americanKestrel).toBe(-10);
-  });
-
-  test("expert difficulty doubles both rewards and penalties", () => {
-    const actual = { ...makeEmptyCounts(), americanKestrel: 3 };
-    const player = { ...actual };
-    const expert = computeScorePerSpecies(actual, player, "expert");
-    expect(expert.americanKestrel).toBe(20);
-
-    const overResult = computeScorePerSpecies(makeEmptyCounts(), {
-      ...makeEmptyCounts(),
-      coopersHawk: 2,
-    }, "expert");
-    expect(overResult.coopersHawk).toBe(-16);
-  });
-
-  test("ignores species not in either counts (zero by default)", () => {
-    const result = computeScorePerSpecies(makeEmptyCounts(), makeEmptyCounts(), "beginner");
-    for (const id of RAPTOR_IDS) {
-      expect(result[id]).toBe(0);
-    }
+  test("counting nothing earns zero even when only one or two birds appeared", () => {
+    const actual = { ...makeEmptyCounts(), americanKestrel: 1, redTailedHawk: 2 };
+    expect(computeTotalScore(computeScorePerSpecies(actual, makeEmptyCounts(), "beginner"))).toBe(0);
   });
 });
 
@@ -229,10 +137,10 @@ describe("computeTotalScore", () => {
 });
 
 describe("computeMaxScore", () => {
-  test("is 10 per species that actually appeared, doubled on expert", () => {
+  test("is 10 per observation, doubled on expert", () => {
     const actual: Counts = { ...makeEmptyCounts(), americanKestrel: 1, redTailedHawk: 2 };
-    expect(computeMaxScore(actual, "beginner")).toBe(20);
-    expect(computeMaxScore(actual, "expert")).toBe(40);
+    expect(computeMaxScore(actual, "beginner")).toBe(30);
+    expect(computeMaxScore(actual, "expert")).toBe(60);
   });
 
   test("is 0 when no species appeared", () => {

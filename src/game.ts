@@ -1,4 +1,5 @@
 export const ROUND_SECONDS = 60;
+export const SCORING_VERSION = 2;
 
 export const RAPTOR_IDS = [
   "americanKestrel",
@@ -43,20 +44,6 @@ export function formatTime(seconds: number): string {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function getMultiplier(streak: number): number {
-  if (streak >= 4) return 5;
-  if (streak >= 3) return 3;
-  if (streak >= 2) return 2;
-  return 1;
-}
-
-export const COMBO_BASE = 5;
-
-export function getComboReward(comboStreak: number): number {
-  const multiplier = getMultiplier(comboStreak);
-  return multiplier > 1 ? (multiplier - 1) * COMBO_BASE : 0;
-}
-
 export function computeNextComboStreak(
   currentStreak: number,
   playerCount: number,
@@ -85,12 +72,7 @@ export function scoreForSpecies(
 ): number {
   const multiplier = difficulty === "expert" ? 2 : 1;
   const delta = Math.abs(player - actual);
-  if (actual > 0) {
-    const base = delta === 0 ? 10 : delta === 1 ? 5 : delta === 2 ? 2 : 0;
-    return base * multiplier;
-  }
-  const base = delta === 0 ? 0 : delta === 1 ? -5 : delta === 2 ? -8 : -10;
-  return base * multiplier;
+  return (actual - delta) * 10 * multiplier;
 }
 
 export function computeScorePerSpecies(
@@ -111,8 +93,8 @@ export function computeTotalScore(scorePerSpecies: Counts): number {
 
 export function computeMaxScore(actualCounts: Counts, difficulty: Difficulty): number {
   const multiplier = difficulty === "expert" ? 2 : 1;
-  const speciesWithBirds = RAPTOR_IDS.filter((id) => actualCounts[id] > 0).length;
-  return speciesWithBirds * 10 * multiplier;
+  const observations = RAPTOR_IDS.reduce((sum, id) => sum + actualCounts[id], 0);
+  return observations * 10 * multiplier;
 }
 
 export function computeCappedTotalScore(

@@ -1,4 +1,6 @@
-export const PENDING_SCORES_KEY = "kestrel.pendingScores";
+import { SCORING_VERSION } from "./game";
+
+export const PENDING_SCORES_KEY = `kestrel.pendingScores.v${SCORING_VERSION}`;
 
 export type PendingHighScore = {
   payload: Record<string, unknown>;

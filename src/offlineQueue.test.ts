@@ -18,6 +18,11 @@ afterEach(() => {
 });
 
 describe("pending high score queue", () => {
+  test("ignores scores queued by the old grading system", () => {
+    window.localStorage.setItem("kestrel.pendingScores", JSON.stringify([SAMPLE]));
+    expect(loadPendingHighScores()).toEqual([]);
+  });
+
   test("starts empty", () => {
     expect(loadPendingHighScores()).toEqual([]);
   });

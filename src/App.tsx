@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "./supabaseClient";
+import { HIGH_SCORES_TABLE, supabase } from "./supabaseClient";
 import { Odometer } from "./Odometer";
 import {
   computeAccuracy,
@@ -25,15 +25,14 @@ import {
   computeTotalDelta,
   computeTotalScore,
   formatTime,
-  getComboReward,
   getFinalCountdownBeep,
-  getMultiplier,
   getRoundPacing,
   hash,
   makeEmptyCounts,
   randomBetween,
   RAPTOR_IDS,
   ROUND_SECONDS,
+  SCORING_VERSION,
   type Counts,
   type Difficulty,
   type RaptorId,
@@ -217,7 +216,7 @@ function dedupeHighScores(scores: HighScore[]) {
 }
 
 function leaderboardCacheKey(level: Difficulty) {
-  return `kestrel.leaderboard.${level}`;
+  return `kestrel.leaderboard.v${SCORING_VERSION}.${level}`;
 }
 
 function loadCachedLeaderboard(level: Difficulty): HighScore[] {
@@ -659,11 +658,10 @@ export function App() {
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
   const [comboStreak, setComboStreak] = useState(0);
-  const [comboBonus, setComboBonus] = useState(0);
   const [paused, setPaused] = useState(false);
   const [showFieldGuide, setShowFieldGuide] = useState(false);
   const [ariaAnnouncement, setAriaAnnouncement] = useState("");
-  const [lastStreakEvent, setLastStreakEvent] = useState<{ raptorId: RaptorId; multiplier: number; timestamp: number } | null>(null);
+  const [lastStreakEvent, setLastStreakEvent] = useState<{ raptorId: RaptorId; timestamp: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<HighScore[]>([]);
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState("");
@@ -696,7 +694,6 @@ export function App() {
   const actualCountsRef = useRef<Counts>(makeCounts());
   const playerCountsRef = useRef<Counts>(makeCounts());
   const comboStreakRef = useRef(0);
-  const comboBonusRef = useRef(0);
   const pausedRef = useRef(false);
   const pausedAtRef = useRef(0);
   const longPressTimerRef = useRef<number | null>(null);
@@ -736,9 +733,7 @@ export function App() {
     [actualCounts, playerCounts, difficulty],
   );
 
-  const accuracyScore = useMemo(() => computeTotalScore(scorePerSpecies), [scorePerSpecies]);
-
-  const totalScore = useMemo(() => accuracyScore + comboBonus, [accuracyScore, comboBonus]);
+  const totalScore = useMemo(() => computeTotalScore(scorePerSpecies), [scorePerSpecies]);
 
   const maxScore = useMemo(() => computeMaxScore(actualCounts, difficulty), [actualCounts, difficulty]);
 
@@ -1440,13 +1435,11 @@ export function App() {
     setPlayerCounts(makeCounts());
     setActualCounts(makeCounts());
     setComboStreak(0);
-    setComboBonus(0);
     setLastStreakEvent(null);
     setTimeLeft(ROUND_SECONDS);
     setCountdown(3);
     playerCountsRef.current = makeCounts();
     comboStreakRef.current = 0;
-    comboBonusRef.current = 0;
     actualCountsRef.current = makeCounts();
     specialStartedRef.current = new Set();
     birdsRef.current = [];
@@ -1673,7 +1666,7 @@ export function App() {
     setIsLeaderboardLoading(true);
     setLeaderboardError("");
     const { data, error } = await supabase
-      .from("kestrel_high_scores")
+      .from(HIGH_SCORES_TABLE)
       .select("*")
       .eq("level", difficulty)
       .order("score", { ascending: false })
@@ -1737,10 +1730,10 @@ export function App() {
     fetchLeaderboard();
 
     const channel = supabase
-      .channel("high_scores_realtime")
+      .channel(`high_scores_v${SCORING_VERSION}_realtime`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "kestrel_high_scores" },
+        { event: "*", schema: "public", table: HIGH_SCORES_TABLE },
         () => {
           fetchLeaderboard();
         }
@@ -1762,7 +1755,7 @@ export function App() {
     const normalizedName = normalizePlayerName(trimmedName);
 
     const { data: existing, error: lookupError } = await supabase
-      .from("kestrel_high_scores")
+      .from(HIGH_SCORES_TABLE)
       .select("id, score, player_name")
       .eq("level", difficulty)
       .ilike("player_name", trimmedName)
@@ -1815,14 +1808,14 @@ export function App() {
 
     if (bestExisting) {
       const updateResult = await supabase
-        .from("kestrel_high_scores")
+        .from(HIGH_SCORES_TABLE)
         .update(fullScorePayload)
         .eq("id", bestExisting.id);
       error = updateResult.error;
 
       if (error && error.message?.toLowerCase().includes("column")) {
         const retry = await supabase
-          .from("kestrel_high_scores")
+          .from(HIGH_SCORES_TABLE)
           .update(baseScorePayload)
           .eq("id", bestExisting.id);
         error = retry.error;
@@ -1831,13 +1824,13 @@ export function App() {
     } else {
       chosenPayload = fullScorePayload;
       const insertResult = await supabase
-        .from("kestrel_high_scores")
+        .from(HIGH_SCORES_TABLE)
         .insert([fullScorePayload]);
       error = insertResult.error;
 
       if (error && error.message?.toLowerCase().includes("column")) {
         const retry = await supabase
-          .from("kestrel_high_scores")
+          .from(HIGH_SCORES_TABLE)
           .insert([baseScorePayload]);
         error = retry.error;
         chosenPayload = baseScorePayload;
@@ -1871,12 +1864,12 @@ export function App() {
       let res;
       if (entry.mode === "update" && entry.targetId != null) {
         res = await supabase
-          .from("kestrel_high_scores")
+          .from(HIGH_SCORES_TABLE)
           .update(entry.payload)
           .eq("id", entry.targetId);
       } else {
         res = await supabase
-          .from("kestrel_high_scores")
+          .from(HIGH_SCORES_TABLE)
           .insert([entry.payload]);
       }
       if (!res.error) {
@@ -1917,15 +1910,9 @@ export function App() {
     comboStreakRef.current = newStreak;
     setComboStreak(newStreak);
 
-    const multiplier = getMultiplier(newStreak);
-    const reward = getComboReward(newStreak);
-    if (reward > 0) {
-      comboBonusRef.current += reward;
-      setComboBonus(comboBonusRef.current);
-    }
-    if (multiplier > 1) {
-      setLastStreakEvent({ raptorId, multiplier, timestamp: Date.now() });
-      setAriaAnnouncement(`${raptorName} counted. ${multiplier} times combo. Total counted ${RAPTOR_IDS.reduce((s, id) => s + playerCountsRef.current[id], 0)}.`);
+    if (newStreak >= 2) {
+      setLastStreakEvent({ raptorId, timestamp: Date.now() });
+      setAriaAnnouncement(`${raptorName} counted. ${newStreak} bird streak. Total counted ${RAPTOR_IDS.reduce((s, id) => s + playerCountsRef.current[id], 0)}.`);
     } else {
       setAriaAnnouncement(`${raptorName} counted. Total counted ${RAPTOR_IDS.reduce((s, id) => s + playerCountsRef.current[id], 0)}.`);
     }
@@ -2201,8 +2188,8 @@ export function App() {
           <canvas ref={canvasRef} className="game-canvas" aria-label="Raptors flying across the sky" />
           {lastStreakEvent && Date.now() - lastStreakEvent.timestamp < 1500 && (
             <div className="streak-flash" key={lastStreakEvent.timestamp}>
-              <span className="streak-multiplier">{lastStreakEvent.multiplier}x</span>
-              <span className="streak-label">COMBO!</span>
+              <span className="streak-multiplier">{comboStreak}</span>
+              <span className="streak-label">IN A ROW!</span>
             </div>
           )}
           <header className="hud">
@@ -2217,7 +2204,7 @@ export function App() {
             {comboStreak >= 2 && (
               <div className="hud-item streak-hud">
                 <span className="streak-indicator">
-                  {getMultiplier(comboStreak)}x STREAK
+                  {comboStreak} IN A ROW
                 </span>
               </div>
             )}
@@ -2279,7 +2266,7 @@ export function App() {
                 <span className="raptor-button-footer">
                   <strong className="raptor-button-count">{playerCounts[raptor.id]}</strong>
                   {isStreakSpecies && (
-                    <span className="button-streak">{getMultiplier(comboStreak)}x<span className="button-streak-label"> combo</span></span>
+                    <span className="button-streak">{comboStreak}<span className="button-streak-label"> streak</span></span>
                   )}
                 </span>
               </button>
@@ -2308,18 +2295,11 @@ export function App() {
                 <h1>{accuracy}% accuracy</h1>
                 <p className="score-display">
                   <strong>{totalScore}</strong>
-                  {comboBonus === 0 ? (
-                    <span> of {maxScore} points</span>
-                  ) : (
-                    <span> points</span>
-                  )}
+                  <span> of {maxScore} points</span>
                 </p>
-                {comboBonus > 0 && (
-                  <p className="score-breakdown">
-                    <span>{accuracyScore} of {maxScore} accuracy</span>
-                    <span className="combo-bonus-line"> +{comboBonus} combo bonus</span>
-                  </p>
-                )}
+                <p className="score-breakdown">
+                  {difficulty === "expert" ? 20 : 10} points per correct observation. Missed or extra birds reduce your score.
+                </p>
               </header>
 
               <div className="results-stats">
@@ -2369,6 +2349,8 @@ export function App() {
                   <Trophy aria-hidden="true" />
                   <h2>Top 5 · {DIFFICULTY[difficulty].label}</h2>
                 </div>
+
+                <p className="leaderboard-message">New grading leaderboard. Earlier scores are retired.</p>
 
                 {hasSubmitted && !qualifiesForHighScore && (
                   <p className="leaderboard-message">
