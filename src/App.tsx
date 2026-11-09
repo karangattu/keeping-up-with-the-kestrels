@@ -2350,8 +2350,6 @@ export function App() {
                   <h2>Top 5 · {DIFFICULTY[difficulty].label}</h2>
                 </div>
 
-                <p className="leaderboard-message">New grading leaderboard. Earlier scores are retired.</p>
-
                 {hasSubmitted && !qualifiesForHighScore && (
                   <p className="leaderboard-message">
                     {submitOfflineNotice || "Score saved. Nice round."}
