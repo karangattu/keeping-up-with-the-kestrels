@@ -20,7 +20,6 @@ import { Odometer } from "./Odometer";
 import {
   computeAccuracy,
   computeMaxScore,
-  computeNextComboStreak,
   computeScorePerSpecies,
   computeTotalDelta,
   computeTotalScore,
@@ -51,6 +50,13 @@ import { getKiteAnimationFrame } from "./kiteHunt";
 import mobbingSheet from "../assets/crow-sprite-sheet.png";
 import huntingSheet from "../assets/kite-mouse-sprite-sheet.png";
 import { advanceSpecialScenes, getHuntingPose, getMobbingPose, getCrowPose, CROW_FLIGHT_FRAMES, SPECIAL_SCENES } from "./specialScenes";
+import {
+  findObservableEncounter,
+  hasFairObservationWindow,
+  nextObservationStreak,
+  shouldCreditObservation,
+  type ObservationEncounter,
+} from "./observation";
 import americanKestrelSheet from "../assets/american-kestrel-sprite-sheet.png";
 import coopersHawkSheet from "../assets/coopers-hawk-sprite-sheet.png";
 import goldenEagleSheet from "../assets/golden-eagle-sprite-sheet.png";
@@ -79,7 +85,8 @@ import redTailedHawkVentralImage from "../assets/red-tailed-hawk-ventral-view.pn
 import turkeyVultureVentralImage from "../assets/turkey-vulture-ventral-view.png";
 
 type Phase = "intro" | "promo" | "tutorial" | "countdown" | "playing" | "results";
-type TutorialRaptorId = "americanKestrel" | "redTailedHawk" | "turkeyVulture";
+export const TUTORIAL_SEQUENCE = ["americanKestrel", "redTailedHawk", "turkeyVulture"] as const;
+type TutorialRaptorId = (typeof TUTORIAL_SEQUENCE)[number];
 type TutorialStep = "welcome" | TutorialRaptorId | "success";
 
 type BeforeInstallPromptEvent = Event & {
@@ -190,6 +197,18 @@ type SpriteAsset = {
   height: number;
   ready: boolean;
 };
+
+function toObservationEncounter(
+  source: "bird" | "thermal",
+  encounter: { id: number; raptorId: RaptorId; startedAt: number; duration: number },
+): ObservationEncounter {
+  return {
+    key: `${source}:${encounter.id}`,
+    raptorId: encounter.raptorId,
+    startedAt: encounter.startedAt,
+    duration: encounter.duration,
+  };
+}
 
 const PROMO_FALLBACK_MS = 9000;
 const MALE_HARRIER_MIN_ROUND_PROGRESS = 0.35;
@@ -387,10 +406,9 @@ const UNIQUE_RAPTORS = RAPTORS.filter(
 const RAPTOR_BY_KEY = new Map(RAPTORS.map((raptor) => [raptor.key, raptor]));
 const RAPTOR_BY_ID = new Map(UNIQUE_RAPTORS.map((raptor) => [raptor.id, raptor]));
 
-const TUTORIAL_RAPTORS = UNIQUE_RAPTORS.filter(
-  (raptor) => raptor.id === "americanKestrel" || raptor.id === "redTailedHawk" || raptor.id === "turkeyVulture"
+const TUTORIAL_RAPTORS = TUTORIAL_SEQUENCE.map(
+  (id) => RAPTORS.find((raptor) => raptor.id === id)!,
 );
-const TUTORIAL_SEQUENCE = ["americanKestrel", "redTailedHawk", "turkeyVulture"] as const satisfies readonly TutorialRaptorId[];
 const TUTORIAL_COPY = {
   americanKestrel: {
     title: "Spot the Kestrel",
@@ -406,7 +424,14 @@ const TUTORIAL_COPY = {
   },
 } satisfies Record<TutorialRaptorId, { title: string; body: string }>;
 
-const SPAWN_RAPTORS = RAPTORS.filter((raptor) => raptor.key !== "northernHarrierMale");
+export const OPENING_SPAWN_RAPTORS = TUTORIAL_RAPTORS;
+const SPAWN_RAPTORS = [
+  ...OPENING_SPAWN_RAPTORS,
+  ...RAPTORS.filter((raptor) => (
+    raptor.key !== "northernHarrierMale"
+    && !TUTORIAL_RAPTORS.some((tutorialRaptor) => tutorialRaptor.id === raptor.id)
+  )),
+];
 const MALE_NORTHERN_HARRIER = RAPTORS.find((raptor) => raptor.key === "northernHarrierMale");
 const THERMAL_RAPTORS = [
   { id: "redShoulderedHawk", image: redShoulderedHawkVentralImage, sizeRatio: relativeBirdSize("redShoulderedHawk"), crop: [68, 208, 1812, 812] },
@@ -657,11 +682,12 @@ export function App() {
   const [tutorialStep, setTutorialStep] = useState<TutorialStep>("welcome");
   const [playerCounts, setPlayerCounts] = useState<Counts>(() => makeCounts());
   const [actualCounts, setActualCounts] = useState<Counts>(() => makeCounts());
-  const [comboStreak, setComboStreak] = useState(0);
+  const [observationStreak, setObservationStreak] = useState(0);
+  const [bestObservationStreak, setBestObservationStreak] = useState(0);
   const [paused, setPaused] = useState(false);
   const [showFieldGuide, setShowFieldGuide] = useState(false);
   const [ariaAnnouncement, setAriaAnnouncement] = useState("");
-  const [lastStreakEvent, setLastStreakEvent] = useState<{ raptorId: RaptorId; timestamp: number } | null>(null);
+  const [lastObservationEvent, setLastObservationEvent] = useState<{ raptorId: RaptorId; timestamp: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<HighScore[]>([]);
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState("");
@@ -693,7 +719,11 @@ export function App() {
   const thermalBirdsRef = useRef<ThermalBird[]>([]);
   const actualCountsRef = useRef<Counts>(makeCounts());
   const playerCountsRef = useRef<Counts>(makeCounts());
-  const comboStreakRef = useRef(0);
+  const observationStreakRef = useRef(0);
+  const bestObservationStreakRef = useRef(0);
+  const scoredEncounterKeysRef = useRef(new Set<string>());
+  const observedEncounterKeysRef = useRef(new Set<string>());
+  const observationTapsRef = useRef(new Map<RaptorId, (string | null)[]>());
   const pausedRef = useRef(false);
   const pausedAtRef = useRef(0);
   const longPressTimerRef = useRef<number | null>(null);
@@ -889,9 +919,11 @@ export function App() {
     
     bird.flapCenters = generateFlapCenters(bird, behavior);
 
+    const roundEndsAt = startTimeRef.current + ROUND_SECONDS * 1000;
+    if (!hasFairObservationWindow(toObservationEncounter("bird", bird), roundEndsAt)) return;
+
     birdIdRef.current += 1;
     birdsRef.current.push(bird);
-    actualCountsRef.current[raptor.id] += 1;
   }, [difficulty]);
 
   const spawnThermalBird = useCallback((viewWidth: number, viewHeight: number, timestamp: number) => {
@@ -935,9 +967,11 @@ export function App() {
       wobble: randomBetween([0.003, 0.008]),
     };
 
+    const roundEndsAt = startTimeRef.current + ROUND_SECONDS * 1000;
+    if (!hasFairObservationWindow(toObservationEncounter("thermal", bird), roundEndsAt)) return;
+
     thermalBirdIdRef.current += 1;
     thermalBirdsRef.current.push(bird);
-    actualCountsRef.current[raptor.id] += 1;
   }, []);
 
   const drawScene = useCallback((timestamp: number) => {
@@ -978,6 +1012,30 @@ export function App() {
 
     birdsRef.current = birdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.08);
     thermalBirdsRef.current = thermalBirdsRef.current.filter((bird) => (timestamp - bird.startedAt) / bird.duration < 1.02);
+
+    if (currentPhase === "playing" && startTimeRef.current > 0) {
+      const roundEndsAt = startTimeRef.current + ROUND_SECONDS * 1000;
+      for (const bird of birdsRef.current) {
+        const encounter = toObservationEncounter("bird", bird);
+        if (
+          !images[bird.raptorKey]?.ready
+          || scoredEncounterKeysRef.current.has(encounter.key)
+          || !shouldCreditObservation(encounter, timestamp, roundEndsAt)
+        ) continue;
+        scoredEncounterKeysRef.current.add(encounter.key);
+        actualCountsRef.current[bird.raptorId] += 1;
+      }
+      for (const bird of thermalBirdsRef.current) {
+        const encounter = toObservationEncounter("thermal", bird);
+        if (
+          !thermalImages[bird.raptorId]?.ready
+          || scoredEncounterKeysRef.current.has(encounter.key)
+          || !shouldCreditObservation(encounter, timestamp, roundEndsAt)
+        ) continue;
+        scoredEncounterKeysRef.current.add(encounter.key);
+        actualCountsRef.current[bird.raptorId] += 1;
+      }
+    }
 
     if (currentPhase === "playing") {
       const elapsed = (timestamp - startTimeRef.current) / 1000;
@@ -1434,12 +1492,17 @@ export function App() {
     setDifficulty(selectedDifficulty);
     setPlayerCounts(makeCounts());
     setActualCounts(makeCounts());
-    setComboStreak(0);
-    setLastStreakEvent(null);
+    setObservationStreak(0);
+    setBestObservationStreak(0);
+    setLastObservationEvent(null);
     setTimeLeft(ROUND_SECONDS);
     setCountdown(3);
     playerCountsRef.current = makeCounts();
-    comboStreakRef.current = 0;
+    observationStreakRef.current = 0;
+    bestObservationStreakRef.current = 0;
+    scoredEncounterKeysRef.current = new Set();
+    observedEncounterKeysRef.current = new Set();
+    observationTapsRef.current = new Map();
     actualCountsRef.current = makeCounts();
     specialStartedRef.current = new Set();
     birdsRef.current = [];
@@ -1891,6 +1954,27 @@ export function App() {
     return () => window.removeEventListener("online", handleOnline);
   }, [flushPendingHighScores]);
 
+  const getRoundEncounters = (): ObservationEncounter[] => {
+    const images = imageMapRef.current;
+    const thermalImages = thermalImageMapRef.current;
+    return [
+      ...birdsRef.current
+        .filter((bird) => images?.[bird.raptorKey]?.ready)
+        .map((bird) => toObservationEncounter("bird", bird)),
+      ...thermalBirdsRef.current
+        .filter((bird) => thermalImages?.[bird.raptorId]?.ready)
+        .map((bird) => toObservationEncounter("thermal", bird)),
+      ...SPECIAL_SCENES
+        .filter((scene) => specialStartedRef.current.has(scene.id))
+        .map((scene) => ({
+          key: `special:${scene.id}`,
+          raptorId: scene.species,
+          startedAt: startTimeRef.current + scene.start * 1000,
+          duration: scene.duration * 1000,
+        })),
+    ];
+  };
+
   const countRaptor = (raptorId: RaptorId) => {
     if (phaseRef.current !== "playing" || pausedRef.current) return;
 
@@ -1900,21 +1984,40 @@ export function App() {
     };
     setPlayerCounts(playerCountsRef.current);
 
-    const raptorName = RAPTOR_BY_ID.get(raptorId)?.shortName ?? raptorId;
-    const actual = actualCountsRef.current[raptorId];
-    const newStreak = computeNextComboStreak(
-      comboStreakRef.current,
-      playerCountsRef.current[raptorId],
-      actual,
+    const roundEndsAt = startTimeRef.current + ROUND_SECONDS * 1000;
+    const observedEncounter = findObservableEncounter(
+      getRoundEncounters(),
+      raptorId,
+      performance.now(),
+      roundEndsAt,
+      observedEncounterKeysRef.current,
     );
-    comboStreakRef.current = newStreak;
-    setComboStreak(newStreak);
+    if (observedEncounter) {
+      observedEncounterKeysRef.current.add(observedEncounter.key);
+    }
+    const taps = observationTapsRef.current.get(raptorId) ?? [];
+    taps.push(observedEncounter?.key ?? null);
+    observationTapsRef.current.set(raptorId, taps);
 
-    if (newStreak >= 2) {
-      setLastStreakEvent({ raptorId, timestamp: Date.now() });
-      setAriaAnnouncement(`${raptorName} counted. ${newStreak} bird streak. Total counted ${RAPTOR_IDS.reduce((s, id) => s + playerCountsRef.current[id], 0)}.`);
+    const newStreak = nextObservationStreak(
+      observationStreakRef.current,
+      Boolean(observedEncounter),
+    );
+    observationStreakRef.current = newStreak;
+    setObservationStreak(newStreak);
+    if (newStreak > bestObservationStreakRef.current) {
+      bestObservationStreakRef.current = newStreak;
+      setBestObservationStreak(newStreak);
+    }
+
+    const raptorName = RAPTOR_BY_ID.get(raptorId)?.shortName ?? raptorId;
+    const totalCounted = RAPTOR_IDS.reduce((sum, id) => sum + playerCountsRef.current[id], 0);
+    if (observedEncounter && newStreak >= 2) {
+      setLastObservationEvent({ raptorId, timestamp: Date.now() });
+      setAriaAnnouncement(`${raptorName} observed. ${newStreak} observations in a row. Total counted ${totalCounted}.`);
     } else {
-      setAriaAnnouncement(`${raptorName} counted. Total counted ${RAPTOR_IDS.reduce((s, id) => s + playerCountsRef.current[id], 0)}.`);
+      setLastObservationEvent(null);
+      setAriaAnnouncement(`${raptorName} counted. Total counted ${totalCounted}.`);
     }
   };
 
@@ -1922,14 +2025,21 @@ export function App() {
     if (phaseRef.current !== "playing" || pausedRef.current) return;
     if (playerCountsRef.current[raptorId] <= 0) return;
 
+    const taps = observationTapsRef.current.get(raptorId);
+    const observedKey = taps?.pop();
+    if (observedKey) {
+      observedEncounterKeysRef.current.delete(observedKey);
+    }
+
     playerCountsRef.current = {
       ...playerCountsRef.current,
       [raptorId]: playerCountsRef.current[raptorId] - 1,
     };
     setPlayerCounts(playerCountsRef.current);
 
-    comboStreakRef.current = 0;
-    setComboStreak(0);
+    observationStreakRef.current = 0;
+    setObservationStreak(0);
+    setLastObservationEvent(null);
     setBumpedButtons((prev) => ({ ...prev, [raptorId]: true }));
     window.setTimeout(() => {
       setBumpedButtons((prev) => ({ ...prev, [raptorId]: false }));
@@ -2186,10 +2296,10 @@ export function App() {
       {phase === "playing" && (
         <section className="game-screen">
           <canvas ref={canvasRef} className="game-canvas" aria-label="Raptors flying across the sky" />
-          {lastStreakEvent && Date.now() - lastStreakEvent.timestamp < 1500 && (
-            <div className="streak-flash" key={lastStreakEvent.timestamp}>
-              <span className="streak-multiplier">{comboStreak}</span>
-              <span className="streak-label">IN A ROW!</span>
+          {lastObservationEvent && Date.now() - lastObservationEvent.timestamp < 1500 && (
+            <div className="streak-flash" key={lastObservationEvent.timestamp}>
+              <span className="streak-multiplier">{observationStreak}</span>
+              <span className="streak-label">OBSERVED IN A ROW!</span>
             </div>
           )}
           <header className="hud">
@@ -2201,10 +2311,10 @@ export function App() {
               <Target aria-hidden="true" />
               <span>{DIFFICULTY[difficulty].label}</span>
             </div>
-            {comboStreak >= 2 && (
+            {observationStreak >= 2 && (
               <div className="hud-item streak-hud">
                 <span className="streak-indicator">
-                  {comboStreak} IN A ROW
+                  {observationStreak} OBSERVED IN A ROW
                 </span>
               </div>
             )}
@@ -2237,7 +2347,7 @@ export function App() {
           <div className="sr-only" aria-live="polite" role="status">{ariaAnnouncement}</div>
           <div className="tap-panel" aria-label="Raptor counters">
             {UNIQUE_RAPTORS.map((raptor) => {
-              const isStreakSpecies = lastStreakEvent?.raptorId === raptor.id && comboStreak >= 2;
+              const isStreakSpecies = lastObservationEvent?.raptorId === raptor.id && observationStreak >= 2;
               return (
               <button
                 className={`raptor-button ${isStreakSpecies ? 'has-streak' : ''} ${bumpedButtons[raptor.id] ? 'bumped' : ''}`}
@@ -2266,7 +2376,7 @@ export function App() {
                 <span className="raptor-button-footer">
                   <strong className="raptor-button-count">{playerCounts[raptor.id]}</strong>
                   {isStreakSpecies && (
-                    <span className="button-streak">{comboStreak}<span className="button-streak-label"> streak</span></span>
+                    <span className="button-streak">{observationStreak}<span className="button-streak-label"> observed</span></span>
                   )}
                 </span>
               </button>
@@ -2314,6 +2424,10 @@ export function App() {
                 <div className="stat">
                   <span className="stat-label">Off by</span>
                   <span className="stat-value">{totalDelta}</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Best streak</span>
+                  <span className="stat-value">{bestObservationStreak}</span>
                 </div>
               </div>
 

@@ -44,15 +44,6 @@ export function formatTime(seconds: number): string {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function computeNextComboStreak(
-  currentStreak: number,
-  playerCount: number,
-  actualCount: number,
-): number {
-  const onTarget = Math.abs(playerCount - actualCount) <= 1;
-  return onTarget ? currentStreak + 1 : 0;
-}
-
 export function getFinalCountdownBeep(
   secondsLeft: number,
 ): { frequency: number; durationMs: number; peakGain: number } | null {
