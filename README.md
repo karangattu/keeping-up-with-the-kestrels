@@ -8,3 +8,6 @@ Tap to count raptors as they fly by — a Bay Area bird ID game. Run `npm instal
 
 Download the APK from a [release](https://github.com/karangattu/keeping-up-with-the-kestrels/releases),
 copy it to the device, and open it.
+
+After a round, enter your name and choose **Save on this device**. You can do
+this offline. The app keeps your best score for each difficulty on the device.

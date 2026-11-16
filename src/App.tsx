@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import {
   BookOpen,
   Clock3,
@@ -103,6 +104,8 @@ type HighScore = {
   level: Difficulty;
   created_at: string;
 };
+
+type LocalScore = Pick<HighScore, "player_name" | "score">;
 
 type ThermalRaptorId =
   | "goldenEagle"
@@ -219,6 +222,32 @@ const THERMAL_TOP_BAND = { min: 0.04, max: 0.26 };
 
 function normalizePlayerName(name: string) {
   return name.trim().toLocaleLowerCase();
+}
+
+function localLeaderboardKey(level: Difficulty) {
+  return `kestrel.localScores.v${SCORING_VERSION}.${level}`;
+}
+
+function loadLocalScores(level: Difficulty): LocalScore[] {
+  try {
+    const scores = JSON.parse(window.localStorage.getItem(localLeaderboardKey(level)) ?? "[]");
+    return Array.isArray(scores) ? scores : [];
+  } catch {
+    return [];
+  }
+}
+
+function LeaderboardList({ scores }: { scores: LocalScore[] }) {
+  if (scores.length === 0) {
+    return <p className="leaderboard-message">No high scores yet. Be the first.</p>;
+  }
+  return scores.map((item, idx) => (
+    <div className={`leaderboard-item rank-${idx + 1}`} key={normalizePlayerName(item.player_name)}>
+      <span className="leaderboard-rank">#{idx + 1}</span>
+      <span className="leaderboard-name">{item.player_name}</span>
+      <span className="leaderboard-score">{item.score} pts</span>
+    </div>
+  ));
 }
 
 function dedupeHighScores(scores: HighScore[]) {
@@ -618,6 +647,7 @@ function playBeep(frequency = 880, durationMs = 220, peakGain = 0.18) {
 }
 
 export function App() {
+  const isAndroid = Capacitor.getPlatform() === "android";
   const [phase, setPhase] = useState<Phase>("intro");
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
@@ -689,6 +719,8 @@ export function App() {
   const [ariaAnnouncement, setAriaAnnouncement] = useState("");
   const [lastObservationEvent, setLastObservationEvent] = useState<{ raptorId: RaptorId; timestamp: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<HighScore[]>([]);
+  const [localScores, setLocalScores] = useState<LocalScore[]>([]);
+  const [localSaveNotice, setLocalSaveNotice] = useState("");
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState("");
   const [leaderboardOffline, setLeaderboardOffline] = useState(false);
@@ -698,6 +730,8 @@ export function App() {
   const [submitError, setSubmitError] = useState("");
   const [submitOfflineNotice, setSubmitOfflineNotice] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const canSaveLocally = isAndroid && !localSaveNotice;
+  const canSubmitOnline = qualifiesForHighScore && !hasSubmitted;
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<RaptorId | null>(null);
   const [shownTooltips, setShownTooltips] = useState<Record<RaptorId, boolean>>(() => ({} as Record<RaptorId, boolean>));
@@ -1783,6 +1817,7 @@ export function App() {
       setPlayerName("");
       setSubmitError("");
       setSubmitOfflineNotice("");
+      setLocalSaveNotice("");
       setLeaderboardError("");
       setLeaderboardOffline(false);
       setIsLeaderboardLoading(false);
@@ -1808,14 +1843,41 @@ export function App() {
     };
   }, [phase, fetchLeaderboard]);
 
+  useEffect(() => {
+    if (isAndroid && phase === "results") setLocalScores(loadLocalScores(difficulty));
+  }, [difficulty, isAndroid, phase]);
+
   const handleScoreSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!playerName.trim() || isSubmitting) return;
+    const trimmedName = playerName.trim();
+    if (!trimmedName) return;
+    const normalizedName = normalizePlayerName(trimmedName);
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (isAndroid && submitter?.value !== "online") {
+      if (!canSaveLocally) return;
+      setSubmitError("");
+      const previous = localScores.find((entry) => normalizePlayerName(entry.player_name) === normalizedName);
+      if (previous && previous.score >= totalScore) {
+        setLocalSaveNotice("Your best score is already saved on this device.");
+        return;
+      }
+      const next = [
+        ...localScores.filter((entry) => entry !== previous),
+        { player_name: trimmedName, score: totalScore },
+      ].sort((a, b) => b.score - a.score);
+      try {
+        window.localStorage.setItem(localLeaderboardKey(difficulty), JSON.stringify(next));
+        setLocalScores(next);
+        setLocalSaveNotice("Score saved on this device.");
+      } catch {
+        setSubmitError("Couldn't save your score on this device. Please try again.");
+      }
+      return;
+    }
+
+    if (!canSubmitOnline || isSubmitting) return;
     setIsSubmitting(true);
     setSubmitError("");
-
-    const trimmedName = playerName.trim();
-    const normalizedName = normalizePlayerName(trimmedName);
 
     const { data: existing, error: lookupError } = await supabase
       .from(HIGH_SCORES_TABLE)
@@ -2431,37 +2493,58 @@ export function App() {
                 </div>
               </div>
 
-              {qualifiesForHighScore && !hasSubmitted && (
+              {(canSaveLocally || canSubmitOnline) && (
                 <form className="high-score-form" onSubmit={handleScoreSubmit}>
-                  <h3>New high score</h3>
-                  <p>You made the top 5! Enter your name:</p>
-                  <div className="input-group">
+                  <h3>{isAndroid ? "Save your score" : "New high score"}</h3>
+                  <p>
+                    {canSubmitOnline
+                      ? `You made the ${isAndroid ? "online " : ""}top 5! Enter your name:`
+                      : "Enter your name:"}
+                  </p>
+                  <div className={isAndroid ? "input-group input-group-local" : "input-group"}>
                     <input
                       type="text"
+                      aria-label="Your name"
                       placeholder="Your name"
                       value={playerName}
                       onChange={(e) => setPlayerName(e.target.value.slice(0, 15))}
                       required
-                      disabled={isSubmitting}
+                      disabled={!isAndroid && isSubmitting}
                       className="high-score-input"
                       maxLength={15}
                     />
-                    <button
-                      className="primary-action submit-score-btn"
-                      type="submit"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? "Saving..." : "Submit"}
-                    </button>
+                    {canSaveLocally && (
+                      <button className="primary-action submit-score-btn" type="submit">
+                        Save on this device
+                      </button>
+                    )}
+                    {canSubmitOnline && (
+                      <button className="primary-action submit-score-btn" type="submit" value="online" disabled={isSubmitting}>
+                        {isSubmitting ? "Saving..." : isAndroid ? "Submit online" : "Submit"}
+                      </button>
+                    )}
                   </div>
                   {submitError && <p className="leaderboard-message error-message">{submitError}</p>}
                 </form>
               )}
 
+              {isAndroid && (
+                <section className="leaderboard-section">
+                  <div className="leaderboard-header">
+                    <Trophy aria-hidden="true" />
+                    <h2>Top 5 on this device · {DIFFICULTY[difficulty].label}</h2>
+                  </div>
+                  {localSaveNotice && <p className="leaderboard-message" role="status">{localSaveNotice}</p>}
+                  <div className="leaderboard-list">
+                    <LeaderboardList scores={localScores.slice(0, LEADERBOARD_SIZE)} />
+                  </div>
+                </section>
+              )}
+
               <section className="leaderboard-section">
                 <div className="leaderboard-header">
                   <Trophy aria-hidden="true" />
-                  <h2>Top 5 · {DIFFICULTY[difficulty].label}</h2>
+                  <h2>Top 5{isAndroid ? " online" : ""} · {DIFFICULTY[difficulty].label}</h2>
                 </div>
 
                 {hasSubmitted && !qualifiesForHighScore && (
@@ -2479,19 +2562,8 @@ export function App() {
                     <p className="leaderboard-message">Loading leaderboard...</p>
                   ) : leaderboardError ? (
                     <p className="leaderboard-message error-message">{leaderboardError}</p>
-                  ) : leaderboard.length === 0 ? (
-                    <p className="leaderboard-message">No high scores yet. Be the first.</p>
                   ) : (
-                    leaderboard.map((item, idx) => (
-                      <div
-                        className={`leaderboard-item rank-${idx + 1}`}
-                        key={item.id}
-                      >
-                        <span className="leaderboard-rank">#{idx + 1}</span>
-                        <span className="leaderboard-name">{item.player_name}</span>
-                        <span className="leaderboard-score">{item.score} pts</span>
-                      </div>
-                    ))
+                    <LeaderboardList scores={leaderboard} />
                   )}
                 </div>
               </section>

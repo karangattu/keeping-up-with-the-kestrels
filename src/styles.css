@@ -787,6 +787,15 @@ button {
   margin-top: 4px;
 }
 
+.input-group-local {
+  flex-wrap: wrap;
+}
+
+.input-group-local .high-score-input {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
 .high-score-input {
   flex: 1;
   background: rgba(8, 25, 30, 0.6);
