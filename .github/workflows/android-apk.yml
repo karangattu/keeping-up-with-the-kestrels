@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build, e.g. v0.2.0"
-        required: true
+        description: "Release tag to build, e.g. v0.2.0. Leave blank to test the selected branch."
+        required: false
 
 permissions:
   contents: write
@@ -30,7 +30,7 @@ jobs:
       ANDROID_DEBUG_STORE_PASSWORD: ${{ secrets.ANDROID_DEBUG_STORE_PASSWORD }}
 
     steps:
-      - name: Checkout tag
+      - name: Checkout source
         uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
@@ -56,15 +56,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Derive version from tag
+      - name: Derive APK version
         id: version
         env:
-          TAG: ${{ inputs.tag || github.ref_name }}
+          TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
         run: |
           set -euo pipefail
           version="${TAG#v}"
+          if [[ -z "$TAG" ]]; then
+            version="$(node -p "require('./package.json').version")"
+          fi
           if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "::error::Tag '$TAG' must look like vMAJOR.MINOR.PATCH"
+            echo "::error::Invalid APK version '$version'; expected MAJOR.MINOR.PATCH"
             exit 1
           fi
           major=$((10#${BASH_REMATCH[1]}))
@@ -103,8 +106,21 @@ jobs:
       - name: Assemble APK
         run: |
           set -euo pipefail
+          # Apply the mirror to buildscript and project dependencies, including Capacitor modules.
+          cat > "$RUNNER_TEMP/maven-mirror.gradle" <<'EOF'
+          gradle.beforeProject { project ->
+              [project.buildscript.repositories, project.repositories].each { repositories ->
+                  repositories.withType(MavenArtifactRepository).configureEach { repository ->
+                      if (repository.url?.host == 'repo.maven.apache.org') {
+                          repository.url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+                      }
+                  }
+              }
+          }
+          EOF
           ./android/gradlew -p android assembleDebug \
             --no-daemon \
+            --init-script "$RUNNER_TEMP/maven-mirror.gradle" \
             -PkestrelsVersionName="${{ steps.version.outputs.name }}" \
             -PkestrelsVersionCode="${{ steps.version.outputs.code }}"
 
@@ -127,6 +143,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attach APK to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag
         uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
